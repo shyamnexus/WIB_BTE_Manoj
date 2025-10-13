@@ -18,4 +18,7 @@ void board_init(void)
 	 * for, e.g., the I/O pins. The initialization can rely on application-
 	 * specific board configuration, found in conf_board.h.
 	 */
+	
+	/* External crystal oscillator configuration is handled in system_sam4e.c */
+	/* The system is configured for 16 MHz crystal with proper PLL settings */
 }

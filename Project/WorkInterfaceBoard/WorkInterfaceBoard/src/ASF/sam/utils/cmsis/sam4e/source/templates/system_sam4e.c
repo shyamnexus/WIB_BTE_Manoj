@@ -45,10 +45,10 @@ extern "C" {
 /**INDENT-ON**/
 /* @endcond */
 
-/* Clock Settings (120MHz) */
+/* Clock Settings (120MHz) - Updated for 16MHz crystal */
 #define SYS_BOARD_OSCOUNT   (CKGR_MOR_MOSCXTST(0x8U))
 #define SYS_BOARD_PLLAR     (CKGR_PLLAR_ONE \
-		| CKGR_PLLAR_MULA(0x13U) \
+		| CKGR_PLLAR_MULA(0x0FU) \
 		| CKGR_PLLAR_PLLACOUNT(0x3fU) \
 		| CKGR_PLLAR_DIVA(0x1U))
 #define SYS_BOARD_MCKR      (PMC_MCKR_PRES_CLK_2 | PMC_MCKR_CSS_PLLA_CLK)
@@ -122,7 +122,7 @@ void SystemCoreClockUpdate( void )
 
 	case PMC_MCKR_CSS_MAIN_CLK:	/* Main clock */
 		if ( PMC->CKGR_MOR & CKGR_MOR_MOSCSEL ) {
-			SystemCoreClock = CHIP_FREQ_XTAL_12M;
+			SystemCoreClock = CHIP_FREQ_XTAL_16M;
 		} else {
 			SystemCoreClock = CHIP_FREQ_MAINCK_RC_4MHZ;
 

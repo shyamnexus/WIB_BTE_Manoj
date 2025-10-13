@@ -32,7 +32,8 @@
 
 int main (void)
 {
-	/* Insert system clock initialization code here (sysclk_init()). */
+	/* System clock is automatically initialized in SystemInit() during startup */
+	/* Clock configuration is handled in system_sam4e.c for 16MHz crystal */
 
 	board_init();
 
