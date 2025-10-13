@@ -74,4 +74,16 @@
 // From module: SAM4E startup code
 #include <exceptions.h>
 
+// From module: CAN - SAM4E
+#include <can.h>
+
+// From module: PIO - Parallel Input/Output Controller
+#include <pio.h>
+
+// From module: PMC - Power Management Controller
+#include <pmc.h>
+
+// From module: RTT - Real-time Timer
+#include <rtt.h>
+
 #endif // ASF_H
