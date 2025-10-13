@@ -52,6 +52,9 @@
  * running the ASF driver selector tool. Any changes will be discarded.
  */
 
+// From module: CAN - Controller Area Network
+#include <can.h>
+
 // From module: Common SAM compiler driver
 #include <compiler.h>
 #include <status_codes.h>
@@ -59,14 +62,24 @@
 // From module: Common build items for user board support templates
 #include <user_board.h>
 
+// From module: Delay routines
+#include <delay.h>
+
 // From module: Generic board support
 #include <board.h>
 
 // From module: Interrupt management - SAM implementation
 #include <interrupt.h>
 
+// From module: PMC - Power Management Controller
+#include <pmc.h>
+#include <sleep.h>
+
 // From module: Part identification macros
 #include <parts.h>
+
+// From module: RTT - Real Time Timer
+#include <rtt.h>
 
 // From module: SAM FPU driver
 #include <fpu.h>
@@ -74,16 +87,7 @@
 // From module: SAM4E startup code
 #include <exceptions.h>
 
-// From module: CAN - SAM4E
-#include <can.h>
-
-// From module: PIO - Parallel Input/Output Controller
-#include <pio.h>
-
-// From module: PMC - Power Management Controller
-#include <pmc.h>
-
-// From module: RTT - Real-time Timer
-#include <rtt.h>
+// From module: System Clock Control - SAM4E implementation
+#include <sysclk.h>
 
 #endif // ASF_H
