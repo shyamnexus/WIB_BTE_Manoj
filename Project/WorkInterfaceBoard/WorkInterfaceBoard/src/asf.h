@@ -65,11 +65,17 @@
 // From module: Delay routines
 #include <delay.h>
 
+// From module: GPIO - General purpose Input/Output
+#include <gpio.h>
+
 // From module: Generic board support
 #include <board.h>
 
 // From module: Interrupt management - SAM implementation
 #include <interrupt.h>
+
+// From module: PIO - Parallel Input/Output Controller
+#include <pio.h>
 
 // From module: PMC - Power Management Controller
 #include <pmc.h>
@@ -89,5 +95,8 @@
 
 // From module: System Clock Control - SAM4E implementation
 #include <sysclk.h>
+
+// From module: pio_handler support enabled
+#include <pio_handler.h>
 
 #endif // ASF_H

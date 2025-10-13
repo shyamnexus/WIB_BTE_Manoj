@@ -2,6 +2,14 @@
 # Automatically-generated file. Do not edit or delete the file
 ################################################################################
 
+src\ASF\sam\drivers\pio\pio.c
+
+src\ASF\sam\drivers\pio\pio_handler.c
+
+src\workhead_can.c
+
+src\workhead_control.c
+
 src\ASF\common\boards\user_board\init.c
 
 src\ASF\common\services\clock\sam4e\sysclk.c

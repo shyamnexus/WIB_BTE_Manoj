@@ -33,15 +33,18 @@
   <options>
     <option id="common.boards" value="Add" config="" content-id="Atmel.ASF" />
     <option id="common.services.basic.clock" value="Add" config="" content-id="Atmel.ASF" />
+    <option id="common.services.delay" value="Add" config="" content-id="Atmel.ASF" />
     <option id="sam.drivers.can" value="Add" config="" content-id="Atmel.ASF" />
     <option id="sam.drivers.rtt" value="Add" config="" content-id="Atmel.ASF" />
-    <option id="common.services.delay" value="Add" config="" content-id="Atmel.ASF" />
+    <option id="sam.drivers.pio" value="Add" config="" content-id="Atmel.ASF" />
+    <option id="common.services.basic.gpio" value="Add" config="" content-id="Atmel.ASF" />
     <option id="sam.utils.linker_scripts" value="Add" config="" content-id="Atmel.ASF" />
   </options>
   <configurations>
     <configuration key="config.compiler.armgcc.fpu_used" value="yes" default="yes" content-id="Atmel.ASF" />
     <configuration key="config.compiler.armgcc.printf" value="iprintf" default="iprintf" content-id="Atmel.ASF" />
     <configuration key="config.compiler.armgcc.scanf" value="iscanf" default="iscanf" content-id="Atmel.ASF" />
+    <configuration key="config.sam.pio.pio_handler" value="yes" default="yes" content-id="Atmel.ASF" />
   </configurations>
   <files>
     <file path="src/main.c" framework="" version="" source="common/applications/user_application/main.c" changed="False" content-id="Atmel.ASF" />
@@ -188,6 +191,12 @@
     <file path="src/ASF/common/services/delay/sam/cycle_counter.c" framework="" version="3.52.0" source="common\services\delay\sam\cycle_counter.c" changed="False" content-id="Atmel.ASF" />
     <file path="src/ASF/common/services/delay/sam/cycle_counter.h" framework="" version="3.52.0" source="common\services\delay\sam\cycle_counter.h" changed="False" content-id="Atmel.ASF" />
     <file path="src/ASF/common/services/delay/delay.h" framework="" version="3.52.0" source="common\services\delay\delay.h" changed="False" content-id="Atmel.ASF" />
+    <file path="src/ASF/sam/drivers/pio/pio.c" framework="" version="3.52.0" source="sam\drivers\pio\pio.c" changed="False" content-id="Atmel.ASF" />
+    <file path="src/ASF/sam/drivers/pio/pio.h" framework="" version="3.52.0" source="sam\drivers\pio\pio.h" changed="False" content-id="Atmel.ASF" />
+    <file path="src/ASF/common/services/gpio/sam_gpio/sam_gpio.h" framework="" version="3.52.0" source="common\services\gpio\sam_gpio\sam_gpio.h" changed="False" content-id="Atmel.ASF" />
+    <file path="src/ASF/common/services/gpio/gpio.h" framework="" version="3.52.0" source="common\services\gpio\gpio.h" changed="False" content-id="Atmel.ASF" />
+    <file path="src/ASF/sam/drivers/pio/pio_handler.c" framework="" version="3.52.0" source="sam\drivers\pio\pio_handler.c" changed="False" content-id="Atmel.ASF" />
+    <file path="src/ASF/sam/drivers/pio/pio_handler.h" framework="" version="3.52.0" source="sam\drivers\pio\pio_handler.h" changed="False" content-id="Atmel.ASF" />
   </files>
   <documentation help="https://asf.microchip.com/docs/3.52.0/common.applications.user_application.user_board.sam4e8c/html/index.html" />
   <offline-documentation help="" />
@@ -236,6 +245,8 @@
       <Value>../src/ASF/common/services/clock</Value>
       <Value>../src/ASF/sam/drivers/rtt</Value>
       <Value>../src/ASF/common/services/delay</Value>
+      <Value>../src/ASF/sam/drivers/pio</Value>
+      <Value>../src/ASF/common/services/gpio</Value>
     </ListValues>
   </armgcc.compiler.directories.IncludePaths>
   <armgcc.compiler.optimization.level>Optimize for size (-Os)</armgcc.compiler.optimization.level>
@@ -276,6 +287,8 @@
       <Value>../src/ASF/common/services/clock</Value>
       <Value>../src/ASF/sam/drivers/rtt</Value>
       <Value>../src/ASF/common/services/delay</Value>
+      <Value>../src/ASF/sam/drivers/pio</Value>
+      <Value>../src/ASF/common/services/gpio</Value>
     </ListValues>
   </armgcc.assembler.general.IncludePaths>
   <armgcc.preprocessingassembler.general.AssemblerFlags>-DARM_MATH_CM4=true -DBOARD=USER_BOARD -Dprintf=iprintf -Dscanf=iscanf</armgcc.preprocessingassembler.general.AssemblerFlags>
@@ -299,6 +312,8 @@
       <Value>../src/ASF/common/services/clock</Value>
       <Value>../src/ASF/sam/drivers/rtt</Value>
       <Value>../src/ASF/common/services/delay</Value>
+      <Value>../src/ASF/sam/drivers/pio</Value>
+      <Value>../src/ASF/common/services/gpio</Value>
     </ListValues>
   </armgcc.preprocessingassembler.general.IncludePaths>
 </ArmGcc>
@@ -341,6 +356,8 @@
       <Value>../src/ASF/common/services/clock</Value>
       <Value>../src/ASF/sam/drivers/rtt</Value>
       <Value>../src/ASF/common/services/delay</Value>
+      <Value>../src/ASF/sam/drivers/pio</Value>
+      <Value>../src/ASF/common/services/gpio</Value>
     </ListValues>
   </armgcc.compiler.directories.IncludePaths>
   <armgcc.compiler.optimization.level>Optimize (-O1)</armgcc.compiler.optimization.level>
@@ -382,6 +399,8 @@
       <Value>../src/ASF/common/services/clock</Value>
       <Value>../src/ASF/sam/drivers/rtt</Value>
       <Value>../src/ASF/common/services/delay</Value>
+      <Value>../src/ASF/sam/drivers/pio</Value>
+      <Value>../src/ASF/common/services/gpio</Value>
     </ListValues>
   </armgcc.assembler.general.IncludePaths>
   <armgcc.assembler.debugging.DebugLevel>Default (-g)</armgcc.assembler.debugging.DebugLevel>
@@ -406,6 +425,8 @@
       <Value>../src/ASF/common/services/clock</Value>
       <Value>../src/ASF/sam/drivers/rtt</Value>
       <Value>../src/ASF/common/services/delay</Value>
+      <Value>../src/ASF/sam/drivers/pio</Value>
+      <Value>../src/ASF/common/services/gpio</Value>
     </ListValues>
   </armgcc.preprocessingassembler.general.IncludePaths>
   <armgcc.preprocessingassembler.debugging.DebugLevel>Default (-Wa,-g)</armgcc.preprocessingassembler.debugging.DebugLevel>
@@ -423,11 +444,14 @@
     <Folder Include="src\ASF\common\services\clock\sam4e\" />
     <Folder Include="src\ASF\common\services\delay\" />
     <Folder Include="src\ASF\common\services\delay\sam\" />
+    <Folder Include="src\ASF\common\services\gpio\" />
+    <Folder Include="src\ASF\common\services\gpio\sam_gpio\" />
     <Folder Include="src\ASF\common\utils\" />
     <Folder Include="src\ASF\common\utils\interrupt\" />
     <Folder Include="src\ASF\sam\" />
     <Folder Include="src\ASF\sam\drivers\" />
     <Folder Include="src\ASF\sam\drivers\can\" />
+    <Folder Include="src\ASF\sam\drivers\pio\" />
     <Folder Include="src\ASF\sam\drivers\pmc\" />
     <Folder Include="src\ASF\sam\drivers\rtt\" />
     <Folder Include="src\ASF\sam\utils\" />
@@ -458,6 +482,30 @@
     <Folder Include="src\config\" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="src\ASF\common\services\gpio\sam_gpio\sam_gpio.h">
+      <SubType>compile</SubType>
+    </None>
+    <None Include="src\ASF\common\services\gpio\gpio.h">
+      <SubType>compile</SubType>
+    </None>
+    <Compile Include="src\ASF\sam\drivers\pio\pio.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <None Include="src\ASF\sam\drivers\pio\pio.h">
+      <SubType>compile</SubType>
+    </None>
+    <Compile Include="src\ASF\sam\drivers\pio\pio_handler.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <None Include="src\ASF\sam\drivers\pio\pio_handler.h">
+      <SubType>compile</SubType>
+    </None>
+    <Compile Include="src\workhead_can.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\workhead_control.c">
+      <SubType>compile</SubType>
+    </Compile>
     <None Include="src\asf.h">
       <SubType>compile</SubType>
     </None>
