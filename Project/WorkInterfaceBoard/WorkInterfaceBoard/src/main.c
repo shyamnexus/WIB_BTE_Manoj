@@ -38,7 +38,7 @@ int main(void)
     workhead_init();
     
     // Initialize CAN communication
-    can_init();
+    workhead_can_init();
     
     // Send startup message
     workhead_status_t status;

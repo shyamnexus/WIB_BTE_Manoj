@@ -19,7 +19,7 @@ static bool can_initialized = false;
 /**
  * \brief Initialize CAN controller
  */
-void can_init(void)
+void workhead_can_init(void)
 {
     // Enable CAN0 peripheral clock
     pmc_enable_periph_clk(ID_CAN0);
