@@ -57,7 +57,7 @@ typedef struct {
 #define CMD_CALIBRATE          0x08    // Calibrate workhead
 
 // Function prototypes
-void can_init(void);
+void workhead_can_init(void);
 void can_send_status(const workhead_status_t *status);
 void can_send_ack(uint8_t command_id, uint8_t result);
 void can_send_error(uint8_t error_code);
