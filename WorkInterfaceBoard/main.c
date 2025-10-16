@@ -29,7 +29,7 @@
  * Support and FAQ: visit <a href="https://www.microchip.com/support/">Microchip Support</a>
  */
 #include <asf.h> // Aggregate include for ASF drivers and services
-#include "TIB_Init.h"
+#include "WIB_Init.h"
 #include "can_app.h"
 #include "tasks.h"
 
@@ -42,7 +42,7 @@ int main (void)
 	//ioport_init(); // Optional: initialize I/O port service if used
 
 	/* Initialize TIB hardware */
-	TIB_Init();
+	WIB_Init();
 	
 	/* Initialize CAN controller */
 	if (!can_app_init()) {

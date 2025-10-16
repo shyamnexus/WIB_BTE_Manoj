@@ -659,10 +659,10 @@
     <Compile Include="src\tasks.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\TIB_Init.c">
+    <Compile Include="src\WIB_Init.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\TIB_Init.h">
+    <Compile Include="src\WIB_Init.h">
       <SubType>compile</SubType>
     </Compile>
     <None Include="src\ASF\sam\drivers\twi\twi.h">

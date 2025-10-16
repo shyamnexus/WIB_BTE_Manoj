@@ -38,7 +38,7 @@ src\spi0.c
 
 src\tasks.c
 
-src\TIB_Init.c
+src\WIB_Init.c
 
 src\ASF\common\services\delay\sam\cycle_counter.c
 
