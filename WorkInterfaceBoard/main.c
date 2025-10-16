@@ -32,6 +32,7 @@
 #include "TIB_Init.h"
 #include "can_app.h"
 #include "tasks.h"
+#include "sensor_test.h"
 
 int main (void)
 {
@@ -42,12 +43,33 @@ int main (void)
 	//ioport_init(); // Optional: initialize I/O port service if used
 
 	/* Initialize TIB hardware */
-	TIB_Init();
+	if (TIB_Init() != 0) {
+		// Hardware initialization failed
+		while(1); // Stop execution if hardware init fails
+	}
 	
 	/* Initialize CAN controller */
 	if (!can_app_init()) {
 		// CAN initialization failed - handle error
 		while(1); // Stop execution if CAN fails
+	}
+	
+	/* Test sensor connections */
+	if (!sensor_test_lis2dh_connection()) {
+		// LIS2DH connection test failed
+		volatile uint32_t debug_sensor_connection_failed = 1;
+		// Continue anyway - sensor might work after tasks start
+	}
+	
+	/* Test sensor readings */
+	if (!sensor_test_accelerometer_reading()) {
+		// Accelerometer reading test failed
+		volatile uint32_t debug_accel_test_failed = 1;
+	}
+	
+	if (!sensor_test_temperature_reading()) {
+		// Temperature reading test failed
+		volatile uint32_t debug_temp_test_failed = 1;
 	}
 	
 // 	/* Test CAN communication (optional - can be disabled for production) */
