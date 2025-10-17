@@ -34,6 +34,10 @@ src\ASF\thirdparty\freertos\freertos-7.3.0\source\timers.c
 
 src\can_app.c
 
+src\i2c0.c
+
+src\mc3419.c
+
 src\spi0.c
 
 src\tasks.c
