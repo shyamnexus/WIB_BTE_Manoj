@@ -42,18 +42,25 @@ i2c0_status_t i2c0_init(void)
 
 static void i2c0_configure_pins(void)
 {
-    // Configure SCL pin (PA4)
-    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA4A_TWD0, 0);
+    // Configure SCL pin (PA4) - TWCK0
+    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA4A_TWCK0, 0);
     
-    // Configure SDA pin (PA3)  
-    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA3A_TWCK0, 0);
+    // Configure SDA pin (PA3) - TWD0
+    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA3A_TWD0, 0);
 }
 
 i2c0_status_t i2c0_write_byte(uint8_t device_addr, uint8_t reg_addr, uint8_t data)
 {
     uint8_t write_data[2] = {reg_addr, data};
+    twi_packet_t packet = {
+        .addr = {reg_addr},
+        .addr_length = 1,
+        .buffer = write_data,
+        .length = 2,
+        .chip = device_addr
+    };
     
-    if (twi_master_write(I2C0_TWI, device_addr, write_data, 2) != TWI_SUCCESS) {
+    if (twi_master_write(I2C0_TWI, &packet) != TWI_SUCCESS) {
         return I2C0_ERROR_NACK;
     }
     
@@ -62,13 +69,25 @@ i2c0_status_t i2c0_write_byte(uint8_t device_addr, uint8_t reg_addr, uint8_t dat
 
 i2c0_status_t i2c0_read_byte(uint8_t device_addr, uint8_t reg_addr, uint8_t *data)
 {
+    twi_packet_t packet;
+    
     // First write the register address
-    if (twi_master_write(I2C0_TWI, device_addr, &reg_addr, 1) != TWI_SUCCESS) {
+    packet.addr[0] = reg_addr;
+    packet.addr_length = 1;
+    packet.buffer = NULL;
+    packet.length = 0;
+    packet.chip = device_addr;
+    
+    if (twi_master_write(I2C0_TWI, &packet) != TWI_SUCCESS) {
         return I2C0_ERROR_NACK;
     }
     
     // Then read the data
-    if (twi_master_read(I2C0_TWI, device_addr, data, 1) != TWI_SUCCESS) {
+    packet.addr_length = 0;
+    packet.buffer = data;
+    packet.length = 1;
+    
+    if (twi_master_read(I2C0_TWI, &packet) != TWI_SUCCESS) {
         return I2C0_ERROR_NACK;
     }
     
@@ -77,13 +96,25 @@ i2c0_status_t i2c0_read_byte(uint8_t device_addr, uint8_t reg_addr, uint8_t *dat
 
 i2c0_status_t i2c0_read_bytes(uint8_t device_addr, uint8_t reg_addr, uint8_t *data, uint8_t count)
 {
+    twi_packet_t packet;
+    
     // First write the register address
-    if (twi_master_write(I2C0_TWI, device_addr, &reg_addr, 1) != TWI_SUCCESS) {
+    packet.addr[0] = reg_addr;
+    packet.addr_length = 1;
+    packet.buffer = NULL;
+    packet.length = 0;
+    packet.chip = device_addr;
+    
+    if (twi_master_write(I2C0_TWI, &packet) != TWI_SUCCESS) {
         return I2C0_ERROR_NACK;
     }
     
     // Then read the data
-    if (twi_master_read(I2C0_TWI, device_addr, data, count) != TWI_SUCCESS) {
+    packet.addr_length = 0;
+    packet.buffer = data;
+    packet.length = count;
+    
+    if (twi_master_read(I2C0_TWI, &packet) != TWI_SUCCESS) {
         return I2C0_ERROR_NACK;
     }
     
@@ -99,7 +130,15 @@ i2c0_status_t i2c0_write_bytes(uint8_t device_addr, uint8_t reg_addr, const uint
         write_data[i + 1] = data[i];
     }
     
-    if (twi_master_write(I2C0_TWI, device_addr, write_data, count + 1) != TWI_SUCCESS) {
+    twi_packet_t packet = {
+        .addr = {reg_addr},
+        .addr_length = 1,
+        .buffer = write_data,
+        .length = count + 1,
+        .chip = device_addr
+    };
+    
+    if (twi_master_write(I2C0_TWI, &packet) != TWI_SUCCESS) {
         return I2C0_ERROR_NACK;
     }
     
