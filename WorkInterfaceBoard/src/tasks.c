@@ -6,6 +6,7 @@
 #include "can_app.h"
 #include "spi0.h"
 #include "lis2dh.h"
+#include "sensor_test.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -100,6 +101,31 @@ void task_accelerometer_temperature(void *arg)
 		vTaskDelay(pdMS_TO_TICKS(100)); // Sample at 10Hz
 	}
 }
+
+void task_sensor_diagnostics(void *arg)
+{
+	(void)arg; // Unused parameter
+	uint32_t diagnostic_counter = 0;
+	
+	while(1) {
+		// Run diagnostics every 10 seconds
+		if (diagnostic_counter % 100 == 0) {
+			sensor_test_print_diagnostics();
+			
+			// Test sensor connections
+			bool accel_ok = sensor_test_accelerometer_reading();
+			bool temp_ok = sensor_test_temperature_reading();
+			
+			// Store diagnostic results for debugging
+			volatile uint32_t debug_accel_status = accel_ok ? 1 : 0;
+			volatile uint32_t debug_temp_status = temp_ok ? 1 : 0;
+			volatile uint32_t debug_diagnostic_counter = diagnostic_counter;
+		}
+		
+		diagnostic_counter++;
+		vTaskDelay(pdMS_TO_TICKS(100)); // Check every 100ms
+	}
+}
 void create_application_tasks(void)
 {
 	
@@ -114,4 +140,7 @@ void create_application_tasks(void)
 	
 	// Option 2: Combined task for both accelerometer and temperature (recommended)
 	xTaskCreate(task_accelerometer_temperature, "accel_temp", 512, 0, tskIDLE_PRIORITY+2, 0);
+	
+	// Optional: Sensor diagnostics task (can be disabled for production)
+	// xTaskCreate(task_sensor_diagnostics, "sensor_diag", 256, 0, tskIDLE_PRIORITY+1, 0);
 } // End create_application_tasks
