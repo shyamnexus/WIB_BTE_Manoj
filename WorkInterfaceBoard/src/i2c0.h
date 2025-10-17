@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "sam.h"
+#include "sam4e.h"
 
 #ifdef __cplusplus
 extern "C" {
