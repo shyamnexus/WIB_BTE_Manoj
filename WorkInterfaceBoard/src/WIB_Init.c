@@ -20,8 +20,8 @@ int WIB_Init()
 	// You can check this value in debugger or via UART
 	volatile uint32_t debug_clock = SystemCoreClock;
 	
-	// Initialize I2C0 at 100kHz
-
+	// Initialize I2C0 at 100kHz for MC3419 accelerometer
+	// I2C initialization is now handled in the MC3419 driver
 	
 
 	return 0;  // Success
