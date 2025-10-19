@@ -22,7 +22,7 @@
 //#define PIN_ADS1120_START    PIO_PB1        /* output to ADC START/SYNC */
 //#define PIN_ADS1120_RST      PIO_PB2        /* output to ADC RESET (if used) */
 
-/* TWI0 (LIS2DE12) */
+/* TWI0 (MC3419DE12) */
 #define PIN_TWI0_TWD         PIO_PA3        /* TWD0 on PA3 (often Peripheral A) */
 #define PIN_TWI0_TWCK        PIO_PA4        /* TWCK0 on PA4 */
 #define PIN_TWI0_PERIPH      PIO_PERIPH_A

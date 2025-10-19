@@ -1,4 +1,4 @@
-src/can_app.d src/can_app.o: ../src/can_app.c ../src/can_app.h \
+src/i2c0.d src/i2c0.o: ../src/i2c0.c ../src/i2c0.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\lib\gcc\arm-none-eabi\6.3.1\include\stdint.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\stdint.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\machine\_default_types.h \
@@ -7,16 +7,6 @@ src/can_app.d src/can_app.o: ../src/can_app.c ../src/can_app.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\sys\_intsup.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\sys\_stdint.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\lib\gcc\arm-none-eabi\6.3.1\include\stdbool.h \
- ../src/asf.h ../src/ASF/sam/drivers/can/can.h \
- ../src/ASF/sam/utils/compiler.h \
- c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\lib\gcc\arm-none-eabi\6.3.1\include\stddef.h \
- ../src/ASF/common/utils/parts.h \
- ../src/ASF/sam/utils/preprocessor/preprocessor.h \
- ../src/ASF/sam/utils/preprocessor/tpaste.h \
- ../src/ASF/sam/utils/preprocessor/stringz.h \
- ../src/ASF/sam/utils/preprocessor/mrepeat.h \
- ../src/ASF/sam/utils/preprocessor/preprocessor.h \
- ../src/ASF/sam/utils/header_files/io.h \
  C:\Program\ Files\ (x86)\Atmel\Studio\7.0\Packs\atmel\SAM4E_DFP\1.1.57\ic.sam4e\include/sam4e.h \
  C:\Program\ Files\ (x86)\Atmel\Studio\7.0\Packs\atmel\SAM4E_DFP\1.1.57\ic.sam4e\include/sam4e8c.h \
  C:\Program\ Files\ (x86)\Atmel\Studio\7.0\Packs\arm\CMSIS\5.4.0\CMSIS\Core\Include/core_cm4.h \
@@ -93,6 +83,16 @@ src/can_app.d src/can_app.o: ../src/can_app.c ../src/can_app.h \
  C:\Program\ Files\ (x86)\Atmel\Studio\7.0\Packs\atmel\SAM4E_DFP\1.1.57\ic.sam4e\include/instance/rtc.h \
  C:\Program\ Files\ (x86)\Atmel\Studio\7.0\Packs\atmel\SAM4E_DFP\1.1.57\ic.sam4e\include/instance/gpbr.h \
  C:\Program\ Files\ (x86)\Atmel\Studio\7.0\Packs\atmel\SAM4E_DFP\1.1.57\ic.sam4e\include/pio/sam4e8c.h \
+ ../src/ASF/common/boards/user_board/conf_board.h \
+ ../src/ASF/sam/drivers/pmc/pmc.h ../src/ASF/sam/utils/compiler.h \
+ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\lib\gcc\arm-none-eabi\6.3.1\include\stddef.h \
+ ../src/ASF/common/utils/parts.h \
+ ../src/ASF/sam/utils/preprocessor/preprocessor.h \
+ ../src/ASF/sam/utils/preprocessor/tpaste.h \
+ ../src/ASF/sam/utils/preprocessor/stringz.h \
+ ../src/ASF/sam/utils/preprocessor/mrepeat.h \
+ ../src/ASF/sam/utils/preprocessor/preprocessor.h \
+ ../src/ASF/sam/utils/header_files/io.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\stdio.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\_ansi.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\newlib.h \
@@ -121,55 +121,19 @@ src/can_app.d src/can_app.o: ../src/can_app.c ../src/can_app.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\alloca.h \
  ../src/ASF/common/utils/interrupt.h \
  ../src/ASF/common/utils/interrupt/interrupt_sam_nvic.h \
- ../src/ASF/sam/utils/status_codes.h \
- ../src/ASF/common/boards/user_board/user_board.h \
- ../src/ASF/common/boards/user_board/conf_board.h \
+ ../src/ASF/sam/drivers/pio/pio.h ../src/ASF/sam/drivers/twi/twi.h \
  ../src/ASF/common/services/delay/delay.h \
  ../src/ASF/common/services/clock/sysclk.h ../src/config/conf_clock.h \
  ../src/ASF/common/services/clock/sam4e/sysclk.h \
  ../src/ASF/common/services/clock/osc.h \
  ../src/ASF/common/services/clock/sam4e/osc.h \
- ../src/ASF/common/boards/board.h ../src/ASF/sam/drivers/pmc/pmc.h \
+ ../src/ASF/common/boards/board.h \
+ ../src/ASF/common/boards/user_board/user_board.h \
  ../src/ASF/common/services/clock/pll.h \
  ../src/ASF/common/services/clock/sam4e/pll.h \
- ../src/ASF/common/services/delay/sam/cycle_counter.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/FreeRTOS.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/projdefs.h \
- ../src/config/FreeRTOSConfig.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/portable.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/portable/gcc/sam_cm4f/portmacro.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/mpu_wrappers.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/FreeRTOS_CLI.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/StackMacros.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/croutine.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/list.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/list.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/mpu_wrappers.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/portable.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/projdefs.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/queue.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/semphr.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/queue.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/task.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/timers.h \
- ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/task.h \
- ../src/ASF/common/services/gpio/gpio.h \
- ../src/ASF/common/services/gpio/sam_gpio/sam_gpio.h \
- ../src/ASF/sam/drivers/pio/pio.h ../src/ASF/sam/drivers/pmc/sleep.h \
- ../src/ASF/sam/utils/fpu/fpu.h \
- ../src/ASF/sam/utils/cmsis/sam4e/source/templates/exceptions.h \
- ../src/ASF/common/services/spi/sam_spi/spi_master.h \
- ../src/ASF/sam/drivers/spi/spi.h ../src/config/conf_spi_master.h \
- ../src/ASF/common/services/twi/sam_twi/twi_master.h \
- ../src/ASF/sam/drivers/twi/twi.h \
- ../src/ASF/common/services/twi/sam_twi/twi_slave.h \
- ../src/ASF/common/services/twi/twi_master.h \
- ../src/ASF/common/services/twi/sam_twi/twi_master.h \
- ../src/ASF/common/services/twi/twi_slave.h \
- ../src/ASF/common/services/twi/sam_twi/twi_slave.h \
- ../src/ASF/sam/drivers/pio/pio_handler.h
+ ../src/ASF/common/services/delay/sam/cycle_counter.h
 
-../src/can_app.h:
+../src/i2c0.h:
 
 c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\lib\gcc\arm-none-eabi\6.3.1\include\stdint.h:
 
@@ -186,28 +150,6 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\sys\_stdint.h:
 
 c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\lib\gcc\arm-none-eabi\6.3.1\include\stdbool.h:
-
-../src/asf.h:
-
-../src/ASF/sam/drivers/can/can.h:
-
-../src/ASF/sam/utils/compiler.h:
-
-c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\lib\gcc\arm-none-eabi\6.3.1\include\stddef.h:
-
-../src/ASF/common/utils/parts.h:
-
-../src/ASF/sam/utils/preprocessor/preprocessor.h:
-
-../src/ASF/sam/utils/preprocessor/tpaste.h:
-
-../src/ASF/sam/utils/preprocessor/stringz.h:
-
-../src/ASF/sam/utils/preprocessor/mrepeat.h:
-
-../src/ASF/sam/utils/preprocessor/preprocessor.h:
-
-../src/ASF/sam/utils/header_files/io.h:
 
 C:\Program\ Files\ (x86)\Atmel\Studio\7.0\Packs\atmel\SAM4E_DFP\1.1.57\ic.sam4e\include/sam4e.h:
 
@@ -361,6 +303,28 @@ C:\Program\ Files\ (x86)\Atmel\Studio\7.0\Packs\atmel\SAM4E_DFP\1.1.57\ic.sam4e\
 
 C:\Program\ Files\ (x86)\Atmel\Studio\7.0\Packs\atmel\SAM4E_DFP\1.1.57\ic.sam4e\include/pio/sam4e8c.h:
 
+../src/ASF/common/boards/user_board/conf_board.h:
+
+../src/ASF/sam/drivers/pmc/pmc.h:
+
+../src/ASF/sam/utils/compiler.h:
+
+c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\lib\gcc\arm-none-eabi\6.3.1\include\stddef.h:
+
+../src/ASF/common/utils/parts.h:
+
+../src/ASF/sam/utils/preprocessor/preprocessor.h:
+
+../src/ASF/sam/utils/preprocessor/tpaste.h:
+
+../src/ASF/sam/utils/preprocessor/stringz.h:
+
+../src/ASF/sam/utils/preprocessor/mrepeat.h:
+
+../src/ASF/sam/utils/preprocessor/preprocessor.h:
+
+../src/ASF/sam/utils/header_files/io.h:
+
 c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\stdio.h:
 
 c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\_ansi.h:
@@ -417,11 +381,9 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 
 ../src/ASF/common/utils/interrupt/interrupt_sam_nvic.h:
 
-../src/ASF/sam/utils/status_codes.h:
+../src/ASF/sam/drivers/pio/pio.h:
 
-../src/ASF/common/boards/user_board/user_board.h:
-
-../src/ASF/common/boards/user_board/conf_board.h:
+../src/ASF/sam/drivers/twi/twi.h:
 
 ../src/ASF/common/services/delay/delay.h:
 
@@ -437,84 +399,10 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 
 ../src/ASF/common/boards/board.h:
 
-../src/ASF/sam/drivers/pmc/pmc.h:
+../src/ASF/common/boards/user_board/user_board.h:
 
 ../src/ASF/common/services/clock/pll.h:
 
 ../src/ASF/common/services/clock/sam4e/pll.h:
 
 ../src/ASF/common/services/delay/sam/cycle_counter.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/FreeRTOS.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/projdefs.h:
-
-../src/config/FreeRTOSConfig.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/portable.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/portable/gcc/sam_cm4f/portmacro.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/mpu_wrappers.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/FreeRTOS_CLI.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/StackMacros.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/croutine.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/list.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/list.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/mpu_wrappers.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/portable.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/projdefs.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/queue.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/semphr.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/queue.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/task.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/timers.h:
-
-../src/ASF/thirdparty/freertos/freertos-7.3.0/source/include/task.h:
-
-../src/ASF/common/services/gpio/gpio.h:
-
-../src/ASF/common/services/gpio/sam_gpio/sam_gpio.h:
-
-../src/ASF/sam/drivers/pio/pio.h:
-
-../src/ASF/sam/drivers/pmc/sleep.h:
-
-../src/ASF/sam/utils/fpu/fpu.h:
-
-../src/ASF/sam/utils/cmsis/sam4e/source/templates/exceptions.h:
-
-../src/ASF/common/services/spi/sam_spi/spi_master.h:
-
-../src/ASF/sam/drivers/spi/spi.h:
-
-../src/config/conf_spi_master.h:
-
-../src/ASF/common/services/twi/sam_twi/twi_master.h:
-
-../src/ASF/sam/drivers/twi/twi.h:
-
-../src/ASF/common/services/twi/sam_twi/twi_slave.h:
-
-../src/ASF/common/services/twi/twi_master.h:
-
-../src/ASF/common/services/twi/sam_twi/twi_master.h:
-
-../src/ASF/common/services/twi/twi_slave.h:
-
-../src/ASF/common/services/twi/sam_twi/twi_slave.h:
-
-../src/ASF/sam/drivers/pio/pio_handler.h:

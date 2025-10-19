@@ -4,7 +4,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-
+#include "can_command_handler.h"
 // Define TickType_t if not already defined
 #ifndef TickType_t
 typedef portTickType TickType_t;
@@ -16,6 +16,11 @@ typedef portTickType TickType_t;
 #ifndef pdMS_TO_TICKS
 #define pdMS_TO_TICKS(ms) ((TickType_t)((ms) / portTICK_RATE_MS)) // Convert ms to OS ticks
 #endif
+
+#define WIB_FID	0x102
+#define TIB_FID 0x101
+
+#define DEVICE_ID WIB_FID		//	This device is WIB
 
 static void can0_configure_pins_local(void)
 {
@@ -62,6 +67,8 @@ bool can_app_init(void)
 	pmc_enable_periph_clk(ID_CAN0); // Enable CAN0 peripheral clock
 	can0_configure_pins_local(); // Route pins to CAN peripheral
 	
+	
+	CAN_CommandInit();
 	// Add delay after pin configuration to ensure stability
 	delay_ms(10);
 	
@@ -242,6 +249,9 @@ bool can_app_reset(void)
 	can_mailbox_send_transfer_cmd(CAN0, &mb);
 	return true;	
 }
+
+
+
 void can_rx_task(void *arg)
 {
 	(void)arg; // Unused
@@ -283,9 +293,12 @@ void can_rx_task(void *arg)
 				
 				// Extract CAN ID and process based on message type
 				uint32_t can_id = rx.ul_fid;//(rx.ul_id >> CAN_MID_MIDvA_Pos) & 0x7FFu;
-// 				if (can_id == CAN_ID_POT_COMMAND) {
-// 					handle_pot_command(data, len); // Execute command
-// 				}
+ 				if (can_id == DEVICE_ID) {
+ 					can_cmd_status_t st = CAN_CommandHandler(data, len, can_id);
+ 					if (st != CAN_CMD_OK) {
+	 					// Optional: log, increment an error counter or send NACK reply
+ 					}
+ 				}
 				// Note: Other message IDs are received but not processed in this task
 				// This allows loopback test (ID 0x123) to be received successfully
 			}

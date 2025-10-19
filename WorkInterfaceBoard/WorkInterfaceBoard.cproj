@@ -650,16 +650,16 @@
     <Compile Include="src\can_app.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\i2c0.c">
+    <Compile Include="src\can_command_handler.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\i2c0.h">
+    <Compile Include="src\can_command_handler.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\mc3419.c">
+    <Compile Include="src\MC3419.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\mc3419.h">
+    <Compile Include="src\MC3419.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\spi0.c">

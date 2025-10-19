@@ -1,154 +1,261 @@
-#include "mc3419.h"
-#include "delay.h"
+/*
+ * MC3419.c
+ *
+ * Created: 10/19/2025 7:39:38 PM
+ *  Author: MKumar
+ */ 
+#include "MC3419.h"
+#include "sam4e.h"
 
-// Private function prototypes
-static bool mc3419_verify_product_id(void);
-static int16_t mc3419_read_16bit_register(uint8_t reg_lsb, uint8_t reg_msb);
+// --- Pin mapping for SAM4E: TWI0 on PA3 (TWD0/SDA) and PA4 (TWCK0/SCL), Peripheral A
+#define TWI0_SDA_PIN   (1u << 3)  // PA3
+#define TWI0_SCL_PIN   (1u << 4)  // PA4
+#define TWI0_PINS      (TWI0_SDA_PIN | TWI0_SCL_PIN)
 
-bool mc3419_init(void)
+static inline void twi0_configure_pins_periphA(void)
 {
-    // Initialize I2C if not already done
-    if (i2c0_init() != I2C0_SUCCESS) {
-        return false;
-    }
-    
-    // Verify product ID
-    if (!mc3419_verify_product_id()) {
-        return false;
-    }
-    
-    // Configure accelerometer
-    // Set to wake mode
-    if (i2c0_write_byte(MC3419_I2C_ADDR, MC3419_REG_MODE, MC3419_MODE_WAKE) != I2C0_SUCCESS) {
-        return false;
-    }
-    
-    // Set sample rate to 100 Hz
-    if (i2c0_write_byte(MC3419_I2C_ADDR, MC3419_REG_SAMPLE_RATE, MC3419_SAMPLE_RATE_100) != I2C0_SUCCESS) {
-        return false;
-    }
-    
-    // Set range to ±8g
-    if (i2c0_write_byte(MC3419_I2C_ADDR, MC3419_REG_RANGE, MC3419_RANGE_8G) != I2C0_SUCCESS) {
-        return false;
-    }
-    
-    // Small delay for configuration to take effect
-    delay_ms(10);
-    
-    return true;
+	// Enable PIOA clock (for pin configuration)
+	PMC->PMC_PCER0 = (1u << ID_PIOA);
+
+	// Enable pull-ups (if you also have external pull-ups that's fine)
+	PIOA->PIO_PUER = TWI0_PINS;
+
+	// Enable multi-drive (open-drain) on SDA/SCL
+	PIOA->PIO_MDER = TWI0_PINS;
+
+	// Select Peripheral A for PA3/PA4
+	// Some header sets expose A/B via PIO_ABSR (0=A, 1=B).
+	// Others expose A/B/C/D via PIO_ABCDSR[2] (00=A, 01=B, 10=C, 11=D).
+	// Some minimal headers expose neither; in that case, assume Peripheral A default.
+	#if defined(PIOA) && defined(PIO_ABSR)
+	// Clear bits => Peripheral A
+	PIOA->PIO_ABSR &= ~TWI0_PINS;
+	#elif defined(PIOA) && defined(PIO_ABCDSR) && defined(PIO_ABCDSR__NUM)
+	// Clear both selects to 0 (Peripheral A)
+	// Some device headers define PIO_ABCDSR as array; others as two registers PIO_ABCDSR[0], [1].
+	PIOA->PIO_ABCDSR[0] &= ~TWI0_PINS;
+	PIOA->PIO_ABCDSR[1] &= ~TWI0_PINS;
+	#elif defined(PIOA) && defined(PIO_ABCDSR)
+	// Treat as array by default
+	((volatile uint32_t*)PIOA->PIO_ABCDSR)[0] &= ~TWI0_PINS;
+	((volatile uint32_t*)PIOA->PIO_ABCDSR)[1] &= ~TWI0_PINS;
+	#else
+	// No peripheral select registers visible; most SAM parts default to Peripheral A
+	// Nothing to do here.
+	#endif
+
+	// Disable PIO control so peripheral takes over
+	PIOA->PIO_PDR = TWI0_PINS;
+
+	// Optional: disable internal glitch/debounce on these pins
+	PIOA->PIO_IFDR = TWI0_PINS;
 }
 
-static bool mc3419_verify_product_id(void)
+static inline void twi0_reset(void)
 {
-    uint8_t product_id;
-    if (i2c0_read_byte(MC3419_I2C_ADDR, MC3419_REG_PRODUCT_ID, &product_id) != I2C0_SUCCESS) {
-        return false;
-    }
-    
-    return (product_id == MC3419_PRODUCT_ID);
+	TWI0->TWI_CR = TWI_CR_SWRST; // Software reset of TWI0
+	(void)TWI0->TWI_RHR; // dummy read
 }
 
-bool mc3419_read_data(mc3419_data_t *data)
+static bool twi0_set_speed(uint32_t mck_hz, uint32_t i2c_hz)
 {
-    if (data == NULL) {
-        return false;
-    }
-    
-    // Check if data is ready
-    if (!mc3419_is_data_ready()) {
-        data->valid = false;
-        return false;
-    }
-    
-    // Read accelerometer data
-    data->x = mc3419_read_16bit_register(MC3419_REG_XOUT_LSB, MC3419_REG_XOUT_MSB);
-    data->y = mc3419_read_16bit_register(MC3419_REG_YOUT_LSB, MC3419_REG_YOUT_MSB);
-    data->z = mc3419_read_16bit_register(MC3419_REG_ZOUT_LSB, MC3419_REG_ZOUT_MSB);
-    
-    // Read temperature data
-    data->temp = mc3419_read_16bit_register(MC3419_REG_TEMP_LSB, MC3419_REG_TEMP_MSB);
-    
-    data->valid = true;
-    return true;
+	if (i2c_hz == 0 || mck_hz == 0) return false; // Validate parameters
+
+	// Debug variables
+	volatile uint32_t debug_cldiv_calc;
+	volatile uint32_t debug_ckdiv_final;
+	volatile uint32_t debug_cldiv_final;
+
+	// Use standard formula: CLDIV=CHDIV=((mck/(2*I2C*2)) - 3) / (2^CKDIV)
+	// We'll solve for CKDIV so that CLDIV fits in 8 bits.
+	uint32_t ckdiv = 0;
+	uint32_t cldiv;
+
+	// We use a simpler common formula from ASF examples:
+	// CLDIV = CHDIV = (mck / (2 * i2c_hz)) - 3 ; then scale by CKDIV until <=255
+	cldiv = (mck_hz / (2u * i2c_hz)) - 3u;
+	debug_cldiv_calc = cldiv;
+	
+	while ((cldiv > 255u) && (ckdiv < 7u)) {
+		ckdiv++;
+		cldiv >>= 1;
+	}
+
+	debug_ckdiv_final = ckdiv;
+	debug_cldiv_final = cldiv;
+
+	if (cldiv > 255u || ckdiv > 7u) {
+		return false; // Requested speed out of range
+	}
+
+	TWI0->TWI_CWGR = TWI_CWGR_CLDIV(cldiv) | TWI_CWGR_CHDIV(cldiv) | TWI_CWGR_CKDIV(ckdiv); // Apply clock config
+	return true;
 }
 
-static int16_t mc3419_read_16bit_register(uint8_t reg_lsb, uint8_t reg_msb)
+bool MC3419_i2c_init(uint32_t mck_hz, uint32_t i2c_hz)
 {
-    uint8_t lsb, msb;
-    int16_t result = 0;
-    
-    // Read LSB first
-    if (i2c0_read_byte(MC3419_I2C_ADDR, reg_lsb, &lsb) != I2C0_SUCCESS) {
-        return 0;
-    }
-    
-    // Read MSB
-    if (i2c0_read_byte(MC3419_I2C_ADDR, reg_msb, &msb) != I2C0_SUCCESS) {
-        return 0;
-    }
-    
-    // Combine MSB and LSB (16-bit signed value)
-    result = (int16_t)((msb << 8) | lsb);
-    
-    return result;
+	if (mck_hz == 0 || i2c_hz == 0) return false; // Validate parameters
+	
+	// Debug: Store parameters for debugging
+	volatile uint32_t debug_mck = mck_hz;
+	volatile uint32_t debug_i2c = i2c_hz;
+	volatile uint32_t debug_step = 1;
+	
+	// Enable peripheral clock for TWI0
+	PMC->PMC_PCER0 = (1u << ID_TWI0);
+	debug_step = 2;
+
+	// Configure pins
+	twi0_configure_pins_periphA();
+	debug_step = 3;
+
+	// Reset and enable master
+	twi0_reset();
+	debug_step = 4;
+	
+	TWI0->TWI_CR = TWI_CR_MSEN | TWI_CR_SVDIS; // Enable master, disable slave
+	debug_step = 5;
+
+	// Set master mode: 7-bit addressing (default), internal addr size configured per transfer
+	TWI0->TWI_MMR = 0;
+	debug_step = 6;
+
+	// Set speed
+	if (!twi0_set_speed(mck_hz, i2c_hz)) {
+		// Debug: Speed setting failed
+		volatile uint32_t debug_speed_fail = 1;
+		debug_step = 99; // Speed calculation failed
+		return false; // Invalid clock settings
+	}
+	
+	debug_step = 7; // Success
+
+	return true;
 }
 
-bool mc3419_set_mode(uint8_t mode)
+// Get TWI status for debugging
+uint32_t MC3419_i2c_get_status(void)
 {
-    return (i2c0_write_byte(MC3419_I2C_ADDR, MC3419_REG_MODE, mode) == I2C0_SUCCESS);
+	return TWI0->TWI_SR;
 }
 
-bool mc3419_set_sample_rate(uint8_t rate)
+static inline bool twi0_write_bytes(uint8_t addr, const uint8_t* buf, uint32_t len)
 {
-    return (i2c0_write_byte(MC3419_I2C_ADDR, MC3419_REG_SAMPLE_RATE, rate) == I2C0_SUCCESS);
+	if (len == 0) return true; // Nothing to write
+
+	// Set write mode and slave address
+	TWI0->TWI_MMR = TWI_MMR_DADR(addr);
+
+	// Send bytes
+	for (uint32_t i = 0; i < len; i++) {
+		// Wait TXRDY with timeout
+		uint32_t timeout = 10000; // Adjust timeout as needed
+		while (!(TWI0->TWI_SR & TWI_SR_TXRDY) && timeout > 0) {
+			timeout--;
+		}
+		if (timeout == 0) return false; // Timeout occurred
+		TWI0->TWI_THR = buf[i];
+	}
+
+	// Send STOP
+	TWI0->TWI_CR = TWI_CR_STOP;
+	// Wait TXCOMP with timeout
+	uint32_t timeout = 10000; // Adjust timeout as needed
+	while (!(TWI0->TWI_SR & TWI_SR_TXCOMP) && timeout > 0) {
+		timeout--;
+	}
+	if (timeout == 0) return false; // Timeout occurred
+
+	return true;
 }
 
-bool mc3419_set_range(uint8_t range)
+static inline bool twi0_write_then_read(uint8_t addr, const uint8_t* w, uint32_t wn, uint8_t* r, uint32_t rn)
 {
-    return (i2c0_write_byte(MC3419_I2C_ADDR, MC3419_REG_RANGE, range) == I2C0_SUCCESS);
+	if (wn == 0 || rn == 0) return false; // Need both phases
+
+	// Program internal address (use IADR) when wn<=3, otherwise do a separate write phase.
+	if (wn <= 3) {
+		uint32_t iadrsz = (wn == 1 ? TWI_MMR_IADRSZ_1_BYTE :
+		wn == 2 ? TWI_MMR_IADRSZ_2_BYTE :
+		TWI_MMR_IADRSZ_3_BYTE);
+		uint32_t iadr = 0;
+		for (uint32_t i=0;i<wn;i++) {
+			iadr = (iadr << 8) | w[i]; // Pack internal address bytes
+		}
+		TWI0->TWI_MMR = TWI_MMR_MREAD | TWI_MMR_DADR(addr) | iadrsz; // Read mode + address size
+		TWI0->TWI_IADR = iadr; // Internal address
+		} else {
+		// Long register sequence: write the bytes first (no STOP), then issue read
+		TWI0->TWI_MMR = TWI_MMR_DADR(addr); // Write mode
+		for (uint32_t i = 0; i < wn; i++) {
+			uint32_t timeout = 10000;
+			while (!(TWI0->TWI_SR & TWI_SR_TXRDY) && timeout > 0) {
+				timeout--;
+			}
+			if (timeout == 0) return false; // Timeout occurred
+			TWI0->TWI_THR = w[i];
+		}
+		uint32_t timeout = 10000;
+		while (!(TWI0->TWI_SR & TWI_SR_TXRDY) && timeout > 0) {
+			timeout--;
+		}
+		if (timeout == 0) return false; // Timeout occurred
+		// fall through to read with no internal address
+		TWI0->TWI_MMR = TWI_MMR_MREAD | TWI_MMR_DADR(addr); // Switch to read mode
+	}
+
+	// Start read
+	if (rn == 1) {
+		TWI0->TWI_CR = TWI_CR_START | TWI_CR_STOP; // Single-byte read
+		} else {
+		TWI0->TWI_CR = TWI_CR_START; // Multi-byte read
+	}
+
+	for (uint32_t i = 0; i < rn; i++) {
+		if (i == rn - 1) {
+			// Last byte: ensure STOP was set
+			TWI0->TWI_CR = TWI_CR_STOP;
+		}
+		uint32_t timeout = 10000;
+		while (!(TWI0->TWI_SR & TWI_SR_RXRDY) && timeout > 0) {
+			timeout--;
+		}
+		if (timeout == 0) return false; // Timeout occurred
+		r[i] = (uint8_t)TWI0->TWI_RHR; // Read byte
+	}
+
+	uint32_t timeout = 10000;
+	while (!(TWI0->TWI_SR & TWI_SR_TXCOMP) && timeout > 0) {
+		timeout--;
+	}
+	if (timeout == 0) return false; // Timeout occurred
+	return true;
 }
 
-bool mc3419_is_data_ready(void)
+
+bool MC3419_i2c_read(uint8_t reg, uint8_t *buf, uint32_t len)
 {
-    uint8_t status;
-    if (i2c0_read_byte(MC3419_I2C_ADDR, MC3419_REG_STATUS, &status) != I2C0_SUCCESS) {
-        return false;
-    }
-    
-    // Check if new data is available (bit 0 of status register)
-    return (status & 0x01) != 0;
+	uint8_t regb[1] = { reg };
+	return twi0_write_then_read(MC3419_ADDR, regb, 1, buf, len); // Register pointer then read
 }
 
-float mc3419_convert_accel_to_g(int16_t raw_value, uint8_t range)
+bool MC3419_whoami(uint8_t *out_who)
 {
-    float scale_factor;
-    
-    // Determine scale factor based on range
-    switch (range) {
-        case MC3419_RANGE_2G:
-            scale_factor = 2.0f / 32768.0f;  // ±2g range
-            break;
-        case MC3419_RANGE_4G:
-            scale_factor = 4.0f / 32768.0f;  // ±4g range
-            break;
-        case MC3419_RANGE_8G:
-            scale_factor = 8.0f / 32768.0f;  // ±8g range
-            break;
-        case MC3419_RANGE_16G:
-            scale_factor = 16.0f / 32768.0f; // ±16g range
-            break;
-        default:
-            scale_factor = 8.0f / 32768.0f;  // Default to ±8g
-            break;
-    }
-    
-    return (float)raw_value * scale_factor;
+	if (!out_who) return false; // Validate pointer
+	return MC3419_i2c_read(0x0F, out_who, 1); // Read WHO_AM_I register
 }
 
-float mc3419_convert_temp_to_celsius(int16_t raw_value)
+// Generic I2C functions that accept device address parameter
+bool i2c_write_bytes(uint8_t addr7, const uint8_t *data, uint32_t len)
 {
-    // MC3419 temperature conversion (typical formula)
-    // Temperature = (raw_value / 256.0) + 25.0
-    return ((float)raw_value / 256.0f) + 25.0f;
+	if (!data || len == 0) return true; // Nothing to write
+	return twi0_write_bytes(addr7, data, len);
 }
+
+bool i2c_write_then_read(uint8_t addr7, const uint8_t *w, uint32_t wn, uint8_t *r, uint32_t rn)
+{
+	if (!w || !r || wn == 0 || rn == 0) return false; // Validate parameters
+	return twi0_write_then_read(addr7, w, wn, r, rn);
+}
+
+

@@ -8,7 +8,7 @@
 
 #ifndef WIB_INIT_H_
 #define WIB_INIT_H_
-#include "sam4e.h"
+#include "sam.h"
 #include <board.h>
 
 #include "spi0.h"
