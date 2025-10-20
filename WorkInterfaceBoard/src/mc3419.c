@@ -289,30 +289,45 @@ bool mc3419_init(void)
 {
 	uint8_t who_am_i;
 	uint8_t config_data;
+	uint32_t retry_count = 0;
+	const uint32_t max_retries = 3;
 	
 	// Initialize I2C with 100kHz speed
 	if (!MC3419_i2c_init(SystemCoreClock, 100000)) {
+		volatile uint32_t debug_i2c_init_failed = 1;
 		return false;
 	}
 	
 	// Wait for I2C to be ready
 	delay_ms(10);
 	
-	// Check WHO_AM_I register
-	if (!MC3419_whoami(&who_am_i)) {
+	// Retry WHO_AM_I check
+	while (retry_count < max_retries) {
+		if (MC3419_whoami(&who_am_i)) {
+			break;
+		}
+		retry_count++;
+		delay_ms(50);
+	}
+	
+	if (retry_count >= max_retries) {
+		volatile uint32_t debug_whoami_failed = 1;
 		return false;
 	}
 	
+	// Store WHO_AM_I for debugging
+	volatile uint8_t debug_who_am_i = who_am_i;
+	
 	// Expected WHO_AM_I value for MC3419 (adjust if different)
 	if (who_am_i != 0x33) {
-		// Store for debugging
-		volatile uint8_t debug_who_am_i = who_am_i;
 		// Continue anyway - might be different variant
+		volatile uint32_t debug_unexpected_whoami = 1;
 	}
 	
 	// Configure sensor for wake mode, 100Hz, ±8g range
 	config_data = MC3419_MODE_WAKE;
 	if (!MC3419_i2c_write(MC3419_REG_MODE, &config_data, 1)) {
+		volatile uint32_t debug_mode_write_failed = 1;
 		return false;
 	}
 	
@@ -321,6 +336,7 @@ bool mc3419_init(void)
 	// Set sample rate to 100Hz
 	config_data = MC3419_SAMPLE_RATE_100HZ;
 	if (!MC3419_i2c_write(MC3419_REG_SAMPLE_RATE, &config_data, 1)) {
+		volatile uint32_t debug_sample_rate_write_failed = 1;
 		return false;
 	}
 	
@@ -329,10 +345,17 @@ bool mc3419_init(void)
 	// Set range to ±8g
 	config_data = MC3419_RANGE_8G;
 	if (!MC3419_i2c_write(MC3419_REG_RANGE, &config_data, 1)) {
+		volatile uint32_t debug_range_write_failed = 1;
 		return false;
 	}
 	
 	delay_ms(10);
+	
+	// Final check - verify sensor is responding
+	if (!mc3419_check_status()) {
+		volatile uint32_t debug_final_status_check_failed = 1;
+		return false;
+	}
 	
 	return true;
 }
@@ -341,26 +364,61 @@ bool mc3419_read_data(mc3419_data_t *data)
 {
 	if (!data) return false;
 	
-	uint8_t raw_data[8];
+	uint8_t temp_lsb, temp_msb;
+	uint8_t z_lsb, z_msb;
+	uint8_t y_lsb, y_msb;
+	uint8_t x_lsb, x_msb;
 	
-	// Read accelerometer and temperature data (8 bytes total)
-	// X: 0x0D-0x0E, Y: 0x0B-0x0C, Z: 0x09-0x0A, Temp: 0x07-0x08
-	if (!MC3419_i2c_read(MC3419_REG_TEMP_LSB, raw_data, 8)) {
+	// Debug: Check I2C status before reading
+	volatile uint32_t debug_i2c_status = MC3419_i2c_get_status();
+	
+	// Read temperature data (2 bytes)
+	if (!MC3419_i2c_read(MC3419_REG_TEMP_LSB, &temp_lsb, 1) ||
+	    !MC3419_i2c_read(MC3419_REG_TEMP_MSB, &temp_msb, 1)) {
+		volatile uint32_t debug_temp_read_failed = 1;
 		data->valid = false;
 		return false;
 	}
 	
-	// Extract temperature (2 bytes)
-	data->temp = (int16_t)((raw_data[1] << 8) | raw_data[0]);
+	// Read Z-axis data (2 bytes)
+	if (!MC3419_i2c_read(MC3419_REG_ZOUT_LSB, &z_lsb, 1) ||
+	    !MC3419_i2c_read(MC3419_REG_ZOUT_MSB, &z_msb, 1)) {
+		volatile uint32_t debug_z_read_failed = 1;
+		data->valid = false;
+		return false;
+	}
 	
-	// Extract Z-axis (2 bytes)
-	data->z = (int16_t)((raw_data[3] << 8) | raw_data[2]);
+	// Read Y-axis data (2 bytes)
+	if (!MC3419_i2c_read(MC3419_REG_YOUT_LSB, &y_lsb, 1) ||
+	    !MC3419_i2c_read(MC3419_REG_YOUT_MSB, &y_msb, 1)) {
+		volatile uint32_t debug_y_read_failed = 1;
+		data->valid = false;
+		return false;
+	}
 	
-	// Extract Y-axis (2 bytes)
-	data->y = (int16_t)((raw_data[5] << 8) | raw_data[4]);
+	// Read X-axis data (2 bytes)
+	if (!MC3419_i2c_read(MC3419_REG_XOUT_LSB, &x_lsb, 1) ||
+	    !MC3419_i2c_read(MC3419_REG_XOUT_MSB, &x_msb, 1)) {
+		volatile uint32_t debug_x_read_failed = 1;
+		data->valid = false;
+		return false;
+	}
 	
-	// Extract X-axis (2 bytes)
-	data->x = (int16_t)((raw_data[7] << 8) | raw_data[6]);
+	// Debug: Store raw byte values for analysis
+	volatile uint8_t debug_temp_lsb = temp_lsb;
+	volatile uint8_t debug_temp_msb = temp_msb;
+	volatile uint8_t debug_x_lsb = x_lsb;
+	volatile uint8_t debug_x_msb = x_msb;
+	volatile uint8_t debug_y_lsb = y_lsb;
+	volatile uint8_t debug_y_msb = y_msb;
+	volatile uint8_t debug_z_lsb = z_lsb;
+	volatile uint8_t debug_z_msb = z_msb;
+	
+	// Combine bytes into 16-bit values
+	data->temp = (int16_t)((temp_msb << 8) | temp_lsb);
+	data->z = (int16_t)((z_msb << 8) | z_lsb);
+	data->y = (int16_t)((y_msb << 8) | y_lsb);
+	data->x = (int16_t)((x_msb << 8) | x_lsb);
 	
 	data->valid = true;
 	return true;
@@ -390,6 +448,37 @@ float mc3419_convert_accel_to_g(int16_t raw, uint8_t range)
 	}
 	
 	return (float)raw * scale_factor;
+}
+
+bool mc3419_check_status(void)
+{
+	uint8_t status;
+	uint8_t who_am_i;
+	
+	// Check if I2C is ready
+	if (!MC3419_i2c_is_ready()) {
+		volatile uint32_t debug_i2c_not_ready = 1;
+		return false;
+	}
+	
+	// Read status register
+	if (!MC3419_i2c_read(MC3419_REG_STATUS, &status, 1)) {
+		volatile uint32_t debug_status_read_failed = 1;
+		return false;
+	}
+	
+	// Read WHO_AM_I register
+	if (!MC3419_whoami(&who_am_i)) {
+		volatile uint32_t debug_whoami_read_failed = 1;
+		return false;
+	}
+	
+	// Store debug values
+	volatile uint8_t debug_status = status;
+	volatile uint8_t debug_who_am_i = who_am_i;
+	
+	// Check if sensor is responding (WHO_AM_I should be 0x33 for MC3419)
+	return (who_am_i == 0x33);
 }
 
 float mc3419_convert_temp_to_celsius(int16_t raw)

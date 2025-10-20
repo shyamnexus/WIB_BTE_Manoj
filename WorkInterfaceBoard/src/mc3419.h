@@ -29,8 +29,8 @@ extern "C" {
 	#define MC3419_REG_ZOUT_MSB        0x0A
 	#define MC3419_REG_TEMP_LSB        0x07
 	#define MC3419_REG_TEMP_MSB        0x08
-	#define MC3419_REG_MODE            0x07
-	#define MC3419_REG_SAMPLE_RATE     0x08
+	#define MC3419_REG_MODE            0x05
+	#define MC3419_REG_SAMPLE_RATE     0x06
 	#define MC3419_REG_RANGE           0x20
 
 	// MC3419 Mode definitions
@@ -90,6 +90,7 @@ extern "C" {
 	// High-level MC3419 functions
 	bool mc3419_init(void); // Initialize MC3419 sensor
 	bool mc3419_read_data(mc3419_data_t *data); // Read accelerometer and temperature data
+	bool mc3419_check_status(void); // Check if sensor is responding
 	float mc3419_convert_accel_to_g(int16_t raw, uint8_t range); // Convert raw acceleration to g-force
 	float mc3419_convert_temp_to_celsius(int16_t raw); // Convert raw temperature to Celsius
 

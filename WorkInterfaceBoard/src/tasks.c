@@ -61,6 +61,13 @@ void task_MC3419DAQ (void *arg)
 	
 	// Main task loop
 	while (1) {
+		// Check sensor status first
+		if (!mc3419_check_status()) {
+			volatile uint32_t debug_sensor_not_responding = 1;
+			vTaskDelay(pdMS_TO_TICKS(100)); // Wait longer if sensor not responding
+			continue;
+		}
+		
 		// Read sensor data
 		if (mc3419_read_data(&sensor_data) && sensor_data.valid) {
 			// Prepare accelerometer data payload (6 bytes: X, Y, Z)
