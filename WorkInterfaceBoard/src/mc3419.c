@@ -264,7 +264,7 @@ bool MC3419_i2c_is_ready(void)
 	// Check if TWI0 is enabled and in master mode
 	return (PMC->PMC_PCSR0 & (1u << ID_TWI0)) && // TWI0 clock enabled
 	       (TWI0->TWI_CR & TWI_CR_MSEN) && // Master mode enabled
-	       !(TWI0->TWI_CR & TWI_CR_SVDIS); // Slave disabled
+	       (TWI0->TWI_CR & TWI_CR_SVDIS); // Slave disabled
 }
 
 // Write 'len' bytes starting at register 'reg'.
