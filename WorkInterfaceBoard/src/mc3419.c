@@ -6,7 +6,7 @@
  */ 
 #include "MC3419.h"
 #include "sam4e.h"
-
+#include "delay.h"
 // --- Pin mapping for SAM4E: TWI0 on PA3 (TWD0/SDA) and PA4 (TWCK0/SCL), Peripheral A
 #define TWI0_SDA_PIN   (1u << 3)  // PA3
 #define TWI0_SCL_PIN   (1u << 4)  // PA4
