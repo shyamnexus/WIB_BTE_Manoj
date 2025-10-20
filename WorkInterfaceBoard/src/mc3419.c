@@ -258,4 +258,145 @@ bool i2c_write_then_read(uint8_t addr7, const uint8_t *w, uint32_t wn, uint8_t *
 	return twi0_write_then_read(addr7, w, wn, r, rn);
 }
 
+// Check if TWI is properly initialized and ready
+bool MC3419_i2c_is_ready(void)
+{
+	// Check if TWI0 is enabled and in master mode
+	return (PMC->PMC_PCSR0 & (1u << ID_TWI0)) && // TWI0 clock enabled
+	       (TWI0->TWI_CR & TWI_CR_MSEN) && // Master mode enabled
+	       !(TWI0->TWI_CR & TWI_CR_SVDIS); // Slave disabled
+}
+
+// Write 'len' bytes starting at register 'reg'.
+bool MC3419_i2c_write(uint8_t reg, const uint8_t *data, uint32_t len)
+{
+	if (!data || len == 0) return true; // Nothing to write
+	
+	// Prepare write buffer with register address followed by data
+	uint8_t write_buf[16]; // Max 15 bytes of data + 1 register address
+	if (len > 15) return false; // Too much data
+	
+	write_buf[0] = reg;
+	for (uint32_t i = 0; i < len; i++) {
+		write_buf[i + 1] = data[i];
+	}
+	
+	return twi0_write_bytes(MC3419_ADDR, write_buf, len + 1);
+}
+
+// High-level MC3419 functions
+bool mc3419_init(void)
+{
+	uint8_t who_am_i;
+	uint8_t config_data;
+	
+	// Initialize I2C with 100kHz speed
+	if (!MC3419_i2c_init(SystemCoreClock, 100000)) {
+		return false;
+	}
+	
+	// Wait for I2C to be ready
+	delay_ms(10);
+	
+	// Check WHO_AM_I register
+	if (!MC3419_whoami(&who_am_i)) {
+		return false;
+	}
+	
+	// Expected WHO_AM_I value for MC3419 (adjust if different)
+	if (who_am_i != 0x33) {
+		// Store for debugging
+		volatile uint8_t debug_who_am_i = who_am_i;
+		// Continue anyway - might be different variant
+	}
+	
+	// Configure sensor for wake mode, 100Hz, ±8g range
+	config_data = MC3419_MODE_WAKE;
+	if (!MC3419_i2c_write(MC3419_REG_MODE, &config_data, 1)) {
+		return false;
+	}
+	
+	delay_ms(10);
+	
+	// Set sample rate to 100Hz
+	config_data = MC3419_SAMPLE_RATE_100HZ;
+	if (!MC3419_i2c_write(MC3419_REG_SAMPLE_RATE, &config_data, 1)) {
+		return false;
+	}
+	
+	delay_ms(10);
+	
+	// Set range to ±8g
+	config_data = MC3419_RANGE_8G;
+	if (!MC3419_i2c_write(MC3419_REG_RANGE, &config_data, 1)) {
+		return false;
+	}
+	
+	delay_ms(10);
+	
+	return true;
+}
+
+bool mc3419_read_data(mc3419_data_t *data)
+{
+	if (!data) return false;
+	
+	uint8_t raw_data[8];
+	
+	// Read accelerometer and temperature data (8 bytes total)
+	// X: 0x0D-0x0E, Y: 0x0B-0x0C, Z: 0x09-0x0A, Temp: 0x07-0x08
+	if (!MC3419_i2c_read(MC3419_REG_TEMP_LSB, raw_data, 8)) {
+		data->valid = false;
+		return false;
+	}
+	
+	// Extract temperature (2 bytes)
+	data->temp = (int16_t)((raw_data[1] << 8) | raw_data[0]);
+	
+	// Extract Z-axis (2 bytes)
+	data->z = (int16_t)((raw_data[3] << 8) | raw_data[2]);
+	
+	// Extract Y-axis (2 bytes)
+	data->y = (int16_t)((raw_data[5] << 8) | raw_data[4]);
+	
+	// Extract X-axis (2 bytes)
+	data->x = (int16_t)((raw_data[7] << 8) | raw_data[6]);
+	
+	data->valid = true;
+	return true;
+}
+
+float mc3419_convert_accel_to_g(int16_t raw, uint8_t range)
+{
+	float scale_factor;
+	
+	// Determine scale factor based on range
+	switch (range) {
+		case MC3419_RANGE_2G:
+			scale_factor = 2.0f / 32768.0f; // ±2g range
+			break;
+		case MC3419_RANGE_4G:
+			scale_factor = 4.0f / 32768.0f; // ±4g range
+			break;
+		case MC3419_RANGE_8G:
+			scale_factor = 8.0f / 32768.0f; // ±8g range
+			break;
+		case MC3419_RANGE_16G:
+			scale_factor = 16.0f / 32768.0f; // ±16g range
+			break;
+		default:
+			scale_factor = 8.0f / 32768.0f; // Default to ±8g
+			break;
+	}
+	
+	return (float)raw * scale_factor;
+}
+
+float mc3419_convert_temp_to_celsius(int16_t raw)
+{
+	// MC3419 temperature conversion formula
+	// Temperature in Celsius = (raw_value / 256.0) + 25.0
+	return ((float)raw / 256.0f) + 25.0f;
+}
+
 
