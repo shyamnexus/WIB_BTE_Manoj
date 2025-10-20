@@ -341,26 +341,61 @@ bool mc3419_read_data(mc3419_data_t *data)
 {
 	if (!data) return false;
 	
-	uint8_t raw_data[8];
+	uint8_t temp_lsb, temp_msb;
+	uint8_t z_lsb, z_msb;
+	uint8_t y_lsb, y_msb;
+	uint8_t x_lsb, x_msb;
 	
-	// Read accelerometer and temperature data (8 bytes total)
-	// X: 0x0D-0x0E, Y: 0x0B-0x0C, Z: 0x09-0x0A, Temp: 0x07-0x08
-	if (!MC3419_i2c_read(MC3419_REG_TEMP_LSB, raw_data, 8)) {
+	// Debug: Check I2C status before reading
+	volatile uint32_t debug_i2c_status = MC3419_i2c_get_status();
+	
+	// Read temperature data (2 bytes)
+	if (!MC3419_i2c_read(MC3419_REG_TEMP_LSB, &temp_lsb, 1) ||
+	    !MC3419_i2c_read(MC3419_REG_TEMP_MSB, &temp_msb, 1)) {
+		volatile uint32_t debug_temp_read_failed = 1;
 		data->valid = false;
 		return false;
 	}
 	
-	// Extract temperature (2 bytes)
-	data->temp = (int16_t)((raw_data[1] << 8) | raw_data[0]);
+	// Read Z-axis data (2 bytes)
+	if (!MC3419_i2c_read(MC3419_REG_ZOUT_LSB, &z_lsb, 1) ||
+	    !MC3419_i2c_read(MC3419_REG_ZOUT_MSB, &z_msb, 1)) {
+		volatile uint32_t debug_z_read_failed = 1;
+		data->valid = false;
+		return false;
+	}
 	
-	// Extract Z-axis (2 bytes)
-	data->z = (int16_t)((raw_data[3] << 8) | raw_data[2]);
+	// Read Y-axis data (2 bytes)
+	if (!MC3419_i2c_read(MC3419_REG_YOUT_LSB, &y_lsb, 1) ||
+	    !MC3419_i2c_read(MC3419_REG_YOUT_MSB, &y_msb, 1)) {
+		volatile uint32_t debug_y_read_failed = 1;
+		data->valid = false;
+		return false;
+	}
 	
-	// Extract Y-axis (2 bytes)
-	data->y = (int16_t)((raw_data[5] << 8) | raw_data[4]);
+	// Read X-axis data (2 bytes)
+	if (!MC3419_i2c_read(MC3419_REG_XOUT_LSB, &x_lsb, 1) ||
+	    !MC3419_i2c_read(MC3419_REG_XOUT_MSB, &x_msb, 1)) {
+		volatile uint32_t debug_x_read_failed = 1;
+		data->valid = false;
+		return false;
+	}
 	
-	// Extract X-axis (2 bytes)
-	data->x = (int16_t)((raw_data[7] << 8) | raw_data[6]);
+	// Debug: Store raw byte values for analysis
+	volatile uint8_t debug_temp_lsb = temp_lsb;
+	volatile uint8_t debug_temp_msb = temp_msb;
+	volatile uint8_t debug_x_lsb = x_lsb;
+	volatile uint8_t debug_x_msb = x_msb;
+	volatile uint8_t debug_y_lsb = y_lsb;
+	volatile uint8_t debug_y_msb = y_msb;
+	volatile uint8_t debug_z_lsb = z_lsb;
+	volatile uint8_t debug_z_msb = z_msb;
+	
+	// Combine bytes into 16-bit values
+	data->temp = (int16_t)((temp_msb << 8) | temp_lsb);
+	data->z = (int16_t)((z_msb << 8) | z_lsb);
+	data->y = (int16_t)((y_msb << 8) | y_lsb);
+	data->x = (int16_t)((x_msb << 8) | x_lsb);
 	
 	data->valid = true;
 	return true;
