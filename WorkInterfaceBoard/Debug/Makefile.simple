@@ -91,6 +91,7 @@ C_SOURCES := $(DEVICE_DIR)/startup_sam4e.c \
              $(SRC_DIR)/can_app.c \
              $(SRC_DIR)/i2c0.c \
              $(SRC_DIR)/lis2_i2c.c \
+             $(SRC_DIR)/mc3419.c \
              $(SRC_DIR)/spi0.c \
              $(SRC_DIR)/tasks.c \
              $(SRC_DIR)/toolsense.c \
