@@ -6,6 +6,7 @@
 #include "can_app.h"
 #include "spi0.h"
 #include "mc3419.h"
+#include "encoder.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -95,6 +96,81 @@ void task_MC3419DAQ (void *arg)
 		vTaskDelay(pdMS_TO_TICKS(10));
 	}
 }
+
+void task_encoder(void *arg)
+{
+	(void)arg; // Unused parameter
+	
+	encoder_data_t enc1_data = {0};
+	encoder_data_t enc2_data = {0};
+	uint8_t enc1_payload[8];
+	uint8_t enc2_payload[8];
+	uint32_t init_retry_count = 0;
+	const uint32_t max_init_retries = 5;
+	
+	// Initialize encoder hardware with retry logic
+	while (init_retry_count < max_init_retries) {
+		if (encoder_init()) {
+			break; // Success
+		}
+		
+		init_retry_count++;
+		delay_ms(1000); // Wait 1 second before retry
+	}
+	
+	// If initialization failed after all retries, set debug flag and continue
+	if (init_retry_count >= max_init_retries) {
+		volatile uint32_t debug_encoder_init_failed = 1;
+		// Continue anyway - task will keep trying to read data
+	}
+	
+	// Reset encoder counters to start from zero
+	encoder_reset_counters();
+	
+	// Main task loop
+	while (1) {
+		// Read encoder data
+		if (encoder_read_data(&enc1_data, &enc2_data)) {
+			// Prepare encoder 1 data payload (8 bytes: position + velocity)
+			enc1_payload[0] = (uint8_t)(enc1_data.position & 0xFF);         // Position LSB
+			enc1_payload[1] = (uint8_t)((enc1_data.position >> 8) & 0xFF);  // Position byte 1
+			enc1_payload[2] = (uint8_t)((enc1_data.position >> 16) & 0xFF); // Position byte 2
+			enc1_payload[3] = (uint8_t)((enc1_data.position >> 24) & 0xFF); // Position MSB
+			enc1_payload[4] = (uint8_t)(enc1_data.velocity & 0xFF);         // Velocity LSB
+			enc1_payload[5] = (uint8_t)((enc1_data.velocity >> 8) & 0xFF);  // Velocity byte 1
+			enc1_payload[6] = (uint8_t)((enc1_data.velocity >> 16) & 0xFF); // Velocity byte 2
+			enc1_payload[7] = (uint8_t)((enc1_data.velocity >> 24) & 0xFF); // Velocity MSB
+			
+			// Prepare encoder 2 data payload (8 bytes: position + velocity)
+			enc2_payload[0] = (uint8_t)(enc2_data.position & 0xFF);         // Position LSB
+			enc2_payload[1] = (uint8_t)((enc2_data.position >> 8) & 0xFF);  // Position byte 1
+			enc2_payload[2] = (uint8_t)((enc2_data.position >> 16) & 0xFF); // Position byte 2
+			enc2_payload[3] = (uint8_t)((enc2_data.position >> 24) & 0xFF); // Position MSB
+			enc2_payload[4] = (uint8_t)(enc2_data.velocity & 0xFF);         // Velocity LSB
+			enc2_payload[5] = (uint8_t)((enc2_data.velocity >> 8) & 0xFF);  // Velocity byte 1
+			enc2_payload[6] = (uint8_t)((enc2_data.velocity >> 16) & 0xFF); // Velocity byte 2
+			enc2_payload[7] = (uint8_t)((enc2_data.velocity >> 24) & 0xFF); // Velocity MSB
+			
+			// Send encoder 1 data over CAN (ID: 0x130)
+			can_app_tx(CAN_ID_ENCODER1, enc1_payload, 8);
+			
+			// Send encoder 2 data over CAN (ID: 0x131)
+			can_app_tx(CAN_ID_ENCODER2, enc2_payload, 8);
+			
+			// Debug: Store conversion values for monitoring
+			volatile int32_t debug_enc1_pos = enc1_data.position;
+			volatile int32_t debug_enc1_vel = enc1_data.velocity;
+			volatile int32_t debug_enc2_pos = enc2_data.position;
+			volatile int32_t debug_enc2_vel = enc2_data.velocity;
+		} else {
+			// Data read failed - set debug flag
+			volatile uint32_t debug_encoder_read_failed = 1;
+		}
+		
+		// Task delay for 50Hz sampling rate (20ms)
+		vTaskDelay(pdMS_TO_TICKS(20));
+	}
+}
 void create_application_tasks(void)
 {
 	
@@ -102,4 +178,5 @@ void create_application_tasks(void)
 	xTaskCreate(can_status_task, "canstatus", 256, 0, tskIDLE_PRIORITY+1, 0); // CAN status monitoring task
 	//xTaskCreate(task_test, "testTask", 512, 0, tskIDLE_PRIORITY+2, 0); // Load cell sampling task
 	xTaskCreate (task_MC3419DAQ, "MC3419 Data  Acquisition" , 512 , 0,tskIDLE_PRIORITY+3 , 0);
+	xTaskCreate(task_encoder, "encoder", 512, 0, tskIDLE_PRIORITY+2, 0); // Encoder reading task
 } // End create_application_tasks
