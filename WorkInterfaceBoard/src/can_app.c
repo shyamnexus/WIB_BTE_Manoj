@@ -5,6 +5,53 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "can_command_handler.h"
+
+// CAN0 interrupt handler to prevent system deadlock
+void CAN0_Handler(void)
+{
+    // Clear CAN0 interrupt flags to prevent continuous triggering
+    uint32_t can_sr = CAN0->CAN_SR;
+    
+    // Clear any pending interrupts by reading the status register
+    // This prevents the interrupt from continuously triggering
+    (void)can_sr; // Suppress unused variable warning
+    
+    // If there are specific CAN error conditions, handle them here
+    if (can_sr & CAN_SR_BOFF) {
+        // CAN is in bus-off state - this might be causing the issue
+        // Reset CAN controller to recover
+        can_disable(CAN0);
+        delay_ms(10);
+        can_enable(CAN0);
+    }
+    
+    // Clear any error flags that might be causing continuous interrupts
+    if (can_sr & (CAN_SR_ERRA | CAN_SR_WARN)) {
+        // Clear error flags by reading error counter register
+        volatile uint32_t ecr = CAN0->CAN_ECR;
+        (void)ecr; // Suppress unused variable warning
+    }
+    
+    // Additional safety: Clear any PIOB interrupts that might be related to CAN
+    // This prevents the system from getting stuck in PIOB_Handler
+    uint32_t piob_status = pio_get_interrupt_status(PIOB);
+    if (piob_status != 0) {
+        // Clear PIOB interrupt status to prevent continuous triggering
+        pio_get_interrupt_status(PIOB);
+    }
+}
+
+// Function to disable CAN interrupts when needed
+void can_disable_interrupts(void)
+{
+    NVIC_DisableIRQ(CAN0_IRQn);
+}
+
+// Function to enable CAN interrupts
+void can_enable_interrupts(void)
+{
+    NVIC_EnableIRQ(CAN0_IRQn);
+}
 // Define TickType_t if not already defined
 #ifndef TickType_t
 typedef portTickType TickType_t;
@@ -160,6 +207,11 @@ bool can_app_init(void)
 		volatile uint32_t debug_bitrate_verification_failed = 1;
 		// Continue anyway, but flag the issue
 	}
+	
+	// Enable CAN0 interrupt in NVIC to prevent system deadlock
+	// Set priority lower than encoder interrupts to avoid conflicts
+	NVIC_SetPriority(CAN0_IRQn, 6); // Lower priority than encoder (priority 5)
+	NVIC_EnableIRQ(CAN0_IRQn);
 	
 	return true;
 }

@@ -143,7 +143,8 @@ bool encoder_init(void)
     pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, PIOA_Handler_WIB);
     
     // Set interrupt priority to allow FreeRTOS tasks to run
-    NVIC_SetPriority(PIOA_IRQn, 5); // Lower priority (higher number = lower priority)
+    // Set higher priority than CAN interrupts to prevent conflicts
+    NVIC_SetPriority(PIOA_IRQn, 4); // Higher priority than CAN (priority 6)
     
     // Don't enable interrupts yet - wait for FreeRTOS tasks to start
     // Interrupts will be enabled later via encoder_enable_interrupts()
@@ -245,6 +246,14 @@ int32_t encoder_get_velocity(uint8_t encoder_num)
 void encoder_enable_interrupts(void)
 {
     if (encoder_initialized) {
+        // Check CAN status before enabling encoder interrupts
+        extern bool can_app_get_status(void);
+        if (!can_app_get_status()) {
+            // CAN is in error state - disable CAN interrupts to prevent deadlock
+            extern void can_disable_interrupts(void);
+            can_disable_interrupts();
+        }
+        
         pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
         NVIC_EnableIRQ(PIOA_IRQn);
     }
