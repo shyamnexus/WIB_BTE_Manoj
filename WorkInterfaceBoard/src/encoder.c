@@ -171,6 +171,27 @@ bool encoder_read_data(encoder_data_t* enc1_data, encoder_data_t* enc2_data)
         enc2_data->velocity = 0;
     }
     
+    // Calculate speed (absolute value of velocity)
+    enc1_data->speed = (enc1_data->velocity >= 0) ? enc1_data->velocity : -enc1_data->velocity;
+    enc2_data->speed = (enc2_data->velocity >= 0) ? enc2_data->velocity : -enc2_data->velocity;
+    
+    // Determine direction
+    if (enc1_data->speed < 5) {  // Threshold for "stopped" (5 counts/sec)
+        enc1_data->direction = ENCODER_DIR_STOPPED;
+    } else if (enc1_data->velocity > 0) {
+        enc1_data->direction = ENCODER_DIR_FORWARD;
+    } else {
+        enc1_data->direction = ENCODER_DIR_REVERSE;
+    }
+    
+    if (enc2_data->speed < 5) {  // Threshold for "stopped" (5 counts/sec)
+        enc2_data->direction = ENCODER_DIR_STOPPED;
+    } else if (enc2_data->velocity > 0) {
+        enc2_data->direction = ENCODER_DIR_FORWARD;
+    } else {
+        enc2_data->direction = ENCODER_DIR_REVERSE;
+    }
+    
     // Update timestamp
     enc1_data->timestamp = current_time;
     enc2_data->timestamp = current_time;
@@ -226,4 +247,56 @@ int32_t encoder_get_velocity(uint8_t encoder_num)
     // This is a simplified version - for accurate velocity calculation,
     // use the encoder_read_data function which tracks velocity over time
     return 0;
+}
+
+// Encode encoder data into CAN message payload
+void encoder_encode_can_message(const encoder_data_t* data, uint8_t* payload)
+{
+    if (!data || !payload) return;
+    
+    // Position (bytes 0-3, little-endian)
+    payload[0] = (uint8_t)(data->position & 0xFF);
+    payload[1] = (uint8_t)((data->position >> 8) & 0xFF);
+    payload[2] = (uint8_t)((data->position >> 16) & 0xFF);
+    payload[3] = (uint8_t)((data->position >> 24) & 0xFF);
+    
+    // Speed (bytes 4-6, little-endian, 24-bit)
+    payload[4] = (uint8_t)(data->speed & 0xFF);
+    payload[5] = (uint8_t)((data->speed >> 8) & 0xFF);
+    payload[6] = (uint8_t)((data->speed >> 16) & 0xFF);
+    
+    // Direction (byte 7)
+    payload[7] = data->direction;
+}
+
+// Decode CAN message payload into encoder data
+void encoder_decode_can_message(const uint8_t* payload, encoder_data_t* data)
+{
+    if (!data || !payload) return;
+    
+    // Position (bytes 0-3, little-endian)
+    data->position = (int32_t)((uint32_t)payload[0] |
+                              ((uint32_t)payload[1] << 8) |
+                              ((uint32_t)payload[2] << 16) |
+                              ((uint32_t)payload[3] << 24));
+    
+    // Speed (bytes 4-6, little-endian, 24-bit)
+    data->speed = (uint32_t)payload[4] |
+                  ((uint32_t)payload[5] << 8) |
+                  ((uint32_t)payload[6] << 16);
+    
+    // Direction (byte 7)
+    data->direction = payload[7];
+    
+    // Reconstruct velocity from speed and direction
+    if (data->direction == ENCODER_DIR_FORWARD) {
+        data->velocity = (int32_t)data->speed;
+    } else if (data->direction == ENCODER_DIR_REVERSE) {
+        data->velocity = -(int32_t)data->speed;
+    } else {
+        data->velocity = 0;
+    }
+    
+    // Set validity flag
+    data->valid = true;
 }

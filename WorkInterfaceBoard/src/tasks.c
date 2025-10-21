@@ -131,25 +131,11 @@ void task_encoder(void *arg)
 	while (1) {
 		// Read encoder data
 		if (encoder_read_data(&enc1_data, &enc2_data)) {
-			// Prepare encoder 1 data payload (8 bytes: position + velocity)
-			enc1_payload[0] = (uint8_t)(enc1_data.position & 0xFF);         // Position LSB
-			enc1_payload[1] = (uint8_t)((enc1_data.position >> 8) & 0xFF);  // Position byte 1
-			enc1_payload[2] = (uint8_t)((enc1_data.position >> 16) & 0xFF); // Position byte 2
-			enc1_payload[3] = (uint8_t)((enc1_data.position >> 24) & 0xFF); // Position MSB
-			enc1_payload[4] = (uint8_t)(enc1_data.velocity & 0xFF);         // Velocity LSB
-			enc1_payload[5] = (uint8_t)((enc1_data.velocity >> 8) & 0xFF);  // Velocity byte 1
-			enc1_payload[6] = (uint8_t)((enc1_data.velocity >> 16) & 0xFF); // Velocity byte 2
-			enc1_payload[7] = (uint8_t)((enc1_data.velocity >> 24) & 0xFF); // Velocity MSB
+			// Prepare encoder 1 data payload using helper function
+			encoder_encode_can_message(&enc1_data, enc1_payload);
 			
-			// Prepare encoder 2 data payload (8 bytes: position + velocity)
-			enc2_payload[0] = (uint8_t)(enc2_data.position & 0xFF);         // Position LSB
-			enc2_payload[1] = (uint8_t)((enc2_data.position >> 8) & 0xFF);  // Position byte 1
-			enc2_payload[2] = (uint8_t)((enc2_data.position >> 16) & 0xFF); // Position byte 2
-			enc2_payload[3] = (uint8_t)((enc2_data.position >> 24) & 0xFF); // Position MSB
-			enc2_payload[4] = (uint8_t)(enc2_data.velocity & 0xFF);         // Velocity LSB
-			enc2_payload[5] = (uint8_t)((enc2_data.velocity >> 8) & 0xFF);  // Velocity byte 1
-			enc2_payload[6] = (uint8_t)((enc2_data.velocity >> 16) & 0xFF); // Velocity byte 2
-			enc2_payload[7] = (uint8_t)((enc2_data.velocity >> 24) & 0xFF); // Velocity MSB
+			// Prepare encoder 2 data payload using helper function
+			encoder_encode_can_message(&enc2_data, enc2_payload);
 			
 			// Send encoder 1 data over CAN (ID: 0x130)
 			can_app_tx(CAN_ID_ENCODER1, enc1_payload, 8);
@@ -160,8 +146,12 @@ void task_encoder(void *arg)
 			// Debug: Store conversion values for monitoring
 			volatile int32_t debug_enc1_pos = enc1_data.position;
 			volatile int32_t debug_enc1_vel = enc1_data.velocity;
+			volatile uint32_t debug_enc1_speed = enc1_data.speed;
+			volatile uint8_t debug_enc1_dir = enc1_data.direction;
 			volatile int32_t debug_enc2_pos = enc2_data.position;
 			volatile int32_t debug_enc2_vel = enc2_data.velocity;
+			volatile uint32_t debug_enc2_speed = enc2_data.speed;
+			volatile uint8_t debug_enc2_dir = enc2_data.direction;
 		} else {
 			// Data read failed - set debug flag
 			volatile uint32_t debug_encoder_read_failed = 1;
