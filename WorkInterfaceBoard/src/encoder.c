@@ -40,15 +40,37 @@ static volatile uint32_t skipped_interrupts = 0;
 #define MIN_INTERRUPT_INTERVAL_MS 5  // Minimum 5ms between interrupts (200Hz max)
 #define MAX_INTERRUPTS_PER_SECOND 100  // Maximum 100 interrupts per second
 
+// Override the default PIOA_Handler to use our custom handler
+void PIOA_Handler(void)
+{
+    PIOA_Handler_WIB();
+}
+
 // Encoder interrupt handlers
 void PIOA_Handler_WIB(void)
 {
     // Don't process interrupts if encoder not initialized
     if (!encoder_initialized) {
+        // Clear any pending interrupts to prevent continuous triggering
+        pio_get_interrupt_status(PIOA);
         return;
     }
     
     uint32_t status = pio_get_interrupt_status(PIOA);
+    
+    // Check if this is actually an encoder interrupt
+    if (!(status & (PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16))) {
+        // Not an encoder interrupt - clear and return
+        return;
+    }
+    
+    // Additional check: if no encoder is connected, disable interrupts to prevent spurious triggers
+    if (!encoder_is_connected()) {
+        // Clear interrupt status and disable interrupts
+        pio_get_interrupt_status(PIOA);
+        encoder_disable_interrupts();
+        return;
+    }
     
     // Rate limiting - prevent excessive interrupt frequency
     uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
@@ -178,7 +200,9 @@ bool encoder_init(void)
     
     // Configure interrupts for encoder pins with proper debouncing
     pio_set_input(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_PULLUP | PIO_DEBOUNCE);
-    pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, PIOA_Handler_WIB);
+    
+    // Configure interrupt mode for encoder pins (edge-triggered)
+    pio_configure_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE);
     
     // Set interrupt priority to allow FreeRTOS tasks to run
     // Set lower priority than system critical interrupts but higher than CAN
@@ -345,6 +369,18 @@ void encoder_get_interrupt_stats(uint32_t* total_interrupts, uint32_t* skipped_i
     }
 }
 
+// Get encoder connection status for debugging
+bool encoder_get_connection_status(void)
+{
+    return encoder_is_connected();
+}
+
+// Get encoder interrupt enable status for debugging
+bool encoder_get_interrupt_status(void)
+{
+    return encoder_interrupts_enabled();
+}
+
 // Reset interrupt statistics
 void encoder_reset_interrupt_stats(void)
 {
@@ -366,5 +402,119 @@ void encoder_enable_interrupts_after_critical(void)
 {
     if (encoder_initialized) {
         pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
+    }
+}
+
+// Check if external encoder is connected by monitoring pin states
+bool encoder_is_connected(void)
+{
+    if (!encoder_initialized) {
+        return false;
+    }
+    
+    // Read encoder pin states multiple times to detect floating pins
+    uint8_t enc1_a_1 = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
+    uint8_t enc1_b_1 = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+    uint8_t enc2_a_1 = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
+    uint8_t enc2_b_1 = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
+    
+    // Small delay to detect floating pins
+    for (volatile int i = 0; i < 100; i++);
+    
+    uint8_t enc1_a_2 = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
+    uint8_t enc1_b_2 = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+    uint8_t enc2_a_2 = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
+    uint8_t enc2_b_2 = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
+    
+    // If pins are floating, they will read different values
+    // If pins are stable, they will read the same values
+    bool enc1_stable = (enc1_a_1 == enc1_a_2) && (enc1_b_1 == enc1_b_2);
+    bool enc2_stable = (enc2_a_1 == enc2_a_2) && (enc2_b_1 == enc2_b_2);
+    
+    // If pins are stable and not in the "no encoder" state, encoder is connected
+    bool enc1_connected = enc1_stable && !((enc1_a_1 == 1 && enc1_b_1 == 1) || (enc1_a_1 == 0 && enc1_b_1 == 0));
+    bool enc2_connected = enc2_stable && !((enc2_a_1 == 1 && enc2_b_1 == 1) || (enc2_a_1 == 0 && enc2_b_1 == 0));
+    
+    return enc1_connected || enc2_connected;
+}
+
+// Monitor encoder connection and disable interrupts if no encoder detected
+void encoder_monitor_connection(void)
+{
+    static uint32_t last_check_time = 0;
+    static uint32_t no_encoder_count = 0;
+    const uint32_t CHECK_INTERVAL_MS = 1000; // Check every second
+    const uint32_t MAX_NO_ENCODER_COUNT = 5; // Disable after 5 seconds of no encoder
+    
+    if (!encoder_initialized) {
+        return;
+    }
+    
+    uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    
+    if (current_time - last_check_time >= CHECK_INTERVAL_MS) {
+        last_check_time = current_time;
+        
+        if (!encoder_is_connected()) {
+            no_encoder_count++;
+            if (no_encoder_count >= MAX_NO_ENCODER_COUNT) {
+                // No encoder detected for too long - disable interrupts to prevent spurious triggers
+                encoder_disable_interrupts();
+                // Reset interrupt statistics
+                encoder_reset_interrupt_stats();
+            }
+        } else {
+            // Encoder detected - reset counter and enable interrupts
+            no_encoder_count = 0;
+            if (!encoder_interrupts_enabled()) {
+                encoder_enable_interrupts();
+            }
+        }
+    }
+}
+
+// Force disable encoder interrupts (for debugging or manual control)
+void encoder_force_disable_interrupts(void)
+{
+    if (encoder_initialized) {
+        pio_disable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
+        NVIC_DisableIRQ(PIOA_IRQn);
+    }
+}
+
+// Force enable encoder interrupts (for debugging or manual control)
+void encoder_force_enable_interrupts(void)
+{
+    if (encoder_initialized) {
+        pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
+        NVIC_EnableIRQ(PIOA_IRQn);
+    }
+}
+
+// Test function to verify encoder connection detection
+void encoder_test_connection_detection(void)
+{
+    if (!encoder_initialized) {
+        return;
+    }
+    
+    // Test connection detection multiple times
+    for (int i = 0; i < 10; i++) {
+        bool connected = encoder_is_connected();
+        volatile uint32_t debug_test_connected = connected ? 1 : 0;
+        
+        // Read pin states for debugging
+        uint8_t enc1_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
+        uint8_t enc1_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+        uint8_t enc2_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
+        uint8_t enc2_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
+        
+        volatile uint32_t debug_enc1_a = enc1_a;
+        volatile uint32_t debug_enc1_b = enc1_b;
+        volatile uint32_t debug_enc2_a = enc2_a;
+        volatile uint32_t debug_enc2_b = enc2_b;
+        
+        // Small delay between tests
+        for (volatile int j = 0; j < 1000; j++);
     }
 }

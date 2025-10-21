@@ -33,6 +33,13 @@ void encoder_get_interrupt_stats(uint32_t* total_interrupts, uint32_t* skipped_i
 void encoder_reset_interrupt_stats(void);
 void encoder_disable_interrupts_temporarily(void);
 void encoder_enable_interrupts_after_critical(void);
+bool encoder_is_connected(void);
+void encoder_monitor_connection(void);
+void encoder_force_disable_interrupts(void);
+void encoder_force_enable_interrupts(void);
+bool encoder_get_connection_status(void);
+bool encoder_get_interrupt_status(void);
+void encoder_test_connection_detection(void);
 
 #ifdef __cplusplus
 }

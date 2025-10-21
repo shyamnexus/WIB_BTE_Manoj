@@ -135,6 +135,9 @@ void task_encoder(void *arg)
 	
 	// Main task loop
 	while (1) {
+		// Monitor encoder connection and disable interrupts if no encoder detected
+		encoder_monitor_connection();
+		
 		// Temporarily disable interrupts during data reading to ensure consistency
 		encoder_disable_interrupts_temporarily();
 		
@@ -199,11 +202,17 @@ void task_interrupt_monitor(void *arg)
 		uint32_t interrupts_per_second = total_interrupts - last_total;
 		uint32_t skipped_per_second = skipped_interrupts - last_skipped;
 		
+		// Get encoder connection and interrupt status
+		bool encoder_connected = encoder_get_connection_status();
+		bool interrupts_enabled = encoder_get_interrupt_status();
+		
 		// Store debug information
 		volatile uint32_t debug_total_interrupts = total_interrupts;
 		volatile uint32_t debug_skipped_interrupts = skipped_interrupts;
 		volatile uint32_t debug_interrupts_per_second = interrupts_per_second;
 		volatile uint32_t debug_skipped_per_second = skipped_per_second;
+		volatile uint32_t debug_encoder_connected = encoder_connected ? 1 : 0;
+		volatile uint32_t debug_interrupts_enabled = interrupts_enabled ? 1 : 0;
 		
 		// If interrupt rate is too high, reset statistics to prevent overflow
 		if (total_interrupts > 10000) {
