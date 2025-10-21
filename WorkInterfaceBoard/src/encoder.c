@@ -40,34 +40,23 @@ static volatile uint32_t skipped_interrupts = 0;
 #define MIN_INTERRUPT_INTERVAL_MS 5  // Minimum 5ms between interrupts (200Hz max)
 #define MAX_INTERRUPTS_PER_SECOND 100  // Maximum 100 interrupts per second
 
-// Override the default PIOA_Handler to use our custom handler
-void PIOA_Handler(void)
-{
-    PIOA_Handler_WIB();
-}
-
-// Encoder interrupt handlers
-void PIOA_Handler_WIB(void)
+// Encoder interrupt handler
+void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
 {
     // Don't process interrupts if encoder not initialized
     if (!encoder_initialized) {
-        // Clear any pending interrupts to prevent continuous triggering
-        pio_get_interrupt_status(PIOA);
         return;
     }
     
-    uint32_t status = pio_get_interrupt_status(PIOA);
-    
     // Check if this is actually an encoder interrupt
-    if (!(status & (PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16))) {
-        // Not an encoder interrupt - clear and return
+    if (!(ul_mask & (PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16))) {
+        // Not an encoder interrupt - return
         return;
     }
     
     // Additional check: if no encoder is connected, disable interrupts to prevent spurious triggers
     if (!encoder_is_connected()) {
-        // Clear interrupt status and disable interrupts
-        pio_get_interrupt_status(PIOA);
+        // Disable interrupts to prevent spurious triggers
         encoder_disable_interrupts();
         return;
     }
@@ -99,7 +88,7 @@ void PIOA_Handler_WIB(void)
     bool enc2_changed = false;
     
     // Handle ENC1 interrupts - only process if either A or B changed
-    if (status & (PIO_PA5 | PIO_PA1)) { // ENC1_A or ENC1_B
+    if (ul_mask & (PIO_PA5 | PIO_PA1)) { // ENC1_A or ENC1_B
         uint8_t a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
         uint8_t b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
         uint8_t new_state = (a_state << 1) | b_state;
@@ -122,7 +111,7 @@ void PIOA_Handler_WIB(void)
     }
     
     // Handle ENC2 interrupts - only process if either A or B changed
-    if (status & (PIO_PA15 | PIO_PA16)) { // ENC2_A or ENC2_B
+    if (ul_mask & (PIO_PA15 | PIO_PA16)) { // ENC2_A or ENC2_B
         uint8_t a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
         uint8_t b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
         uint8_t new_state = (a_state << 1) | b_state;
@@ -146,8 +135,7 @@ void PIOA_Handler_WIB(void)
     
     // If no encoders changed, this was likely a spurious interrupt
     if (!enc1_changed && !enc2_changed) {
-        // Clear any pending interrupts to prevent continuous triggering
-        pio_get_interrupt_status(PIOA);
+        // No action needed - ASF handler system will clear the interrupt
     }
 }
 
@@ -203,6 +191,9 @@ bool encoder_init(void)
     
     // Configure interrupt mode for encoder pins (edge-triggered)
     pio_configure_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE);
+    
+    // Register our interrupt handler with the ASF PIO handler system
+    pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, encoder_interrupt_handler);
     
     // Set interrupt priority to allow FreeRTOS tasks to run
     // Set lower priority than system critical interrupts but higher than CAN
