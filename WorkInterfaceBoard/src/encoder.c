@@ -1,5 +1,6 @@
 #include "encoder.h"
 #include "asf.h"
+#include "sam4e.h"
 #include "FreeRTOS.h"
 #include "task.h"
 
