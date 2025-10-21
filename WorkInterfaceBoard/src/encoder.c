@@ -3,6 +3,18 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+
+#ifndef TickType_t
+typedef portTickType TickType_t; // Backward-compatible alias if TickType_t isn't defined
+#endif
+#ifndef pdMS_TO_TICKS
+#define pdMS_TO_TICKS(ms) ((TickType_t)((ms) / portTICK_PERIOD_MS)) // Convert milliseconds to OS ticks
+#endif
+
+#ifndef portTICK_PERIOD_MS
+#define portTICK_PERIOD_MS portTICK_RATE_MS // Legacy macro mapping
+#endif
+
 // Static variables for encoder state
 static volatile int32_t enc1_position = 0;
 static volatile int32_t enc2_position = 0;
@@ -17,7 +29,7 @@ static volatile uint8_t enc1_state = 0;
 static volatile uint8_t enc2_state = 0;
 
 // Encoder interrupt handlers
-void PIOA_Handler(void)
+void PIOA_Handler_WIB(void)
 {
     uint32_t status = pio_get_interrupt_status(PIOA);
     
@@ -121,7 +133,7 @@ bool encoder_init(void)
     
     // Configure interrupts for encoder pins
     pio_set_input(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_PULLUP | PIO_DEBOUNCE);
-    pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, PIOA_Handler);
+    pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, PIOA_Handler_WIB);
     pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
     NVIC_EnableIRQ(PIOA_IRQn);
     

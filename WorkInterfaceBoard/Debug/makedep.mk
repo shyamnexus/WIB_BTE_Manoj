@@ -40,6 +40,8 @@ src\can_app.c
 
 src\can_command_handler.c
 
+src\encoder.c
+
 src\MC3419.c
 
 src\tasks.c

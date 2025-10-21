@@ -691,6 +691,9 @@
     <Compile Include="src\can_command_handler.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\encoder.c">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\MC3419.c">
       <SubType>compile</SubType>
     </Compile>
