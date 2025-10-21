@@ -124,6 +124,12 @@ void task_encoder(void *arg)
 		// Continue anyway - task will keep trying to read data
 	}
 	
+	// Wait for system to stabilize before enabling interrupts
+	vTaskDelay(pdMS_TO_TICKS(2000)); // Wait 2 seconds for system to stabilize
+	
+	// Enable encoder interrupts now that tasks are running
+	encoder_enable_interrupts();
+	
 	// Reset encoder counters to start from zero
 	encoder_reset_counters();
 	

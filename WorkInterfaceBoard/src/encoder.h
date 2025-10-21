@@ -26,6 +26,9 @@ bool encoder_read_data(encoder_data_t* enc1_data, encoder_data_t* enc2_data);
 void encoder_reset_counters(void);
 int32_t encoder_get_position(uint8_t encoder_num);
 int32_t encoder_get_velocity(uint8_t encoder_num);
+void encoder_enable_interrupts(void);
+void encoder_disable_interrupts(void);
+bool encoder_interrupts_enabled(void);
 
 #ifdef __cplusplus
 }
