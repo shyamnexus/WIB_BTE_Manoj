@@ -26,20 +26,20 @@ void board_init(void)
     /***********************
      * ENCODER 1 - PA5/TIOA0, PA1/TIOB0, PD17/ENABLE1
      ***********************/
-    // Encoder 1 pins -> Peripheral A
-    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA5A_TIOA0, 0);  // ENC1_A
-    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1A_TIOB0, 0);  // ENC1_B
-    // Encoder 1 enable as GPIO output
-    pio_set_output(PIOD, PIO_PD17, 0, 0, 0); // ENC1_ENABLE (low = enabled)
-
-    /***********************
-     * ENCODER 2 - PA15/TIOA1, PA16/TIOB1, PD27/ENABLE2
-     ***********************/
-    // Encoder 2 pins -> Peripheral A
-    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA15A_TIOA1, 0); // ENC2_A
-    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA16A_TIOB1, 0); // ENC2_B
-    // Encoder 2 enable as GPIO output
-    pio_set_output(PIOD, PIO_PD27, 0, 0, 0); // ENC2_ENABLE (low = enabled)
+	//Encoder 1 pins -> Peripheral A
+	pio_configure(PIOA, PIO_PERIPH_B, PIO_PA0B_TIOA0, 0);  // ENC1_A
+	pio_configure(PIOA, PIO_PERIPH_B, PIO_PA1B_TIOB0, 0);  // ENC1_B
+	//Encoder 1 enable as GPIO output
+	pio_set_output(PIOD, PIO_PD17, 0, 0, 0); // ENC1_ENABLE (low = enabled)
+ 
+	/***********************
+	* ENCODER 2 - PA15/TIOA1, PA16/TIOB1, PD27/ENABLE2
+	***********************/
+	//Encoder 2 pins -> Peripheral A
+	pio_configure(PIOA, PIO_PERIPH_B, PIO_PA15B_TIOA1, 0); // ENC2_A
+	pio_configure(PIOA, PIO_PERIPH_B, PIO_PA16B_TIOB1, 0); // ENC2_B
+	// Encoder 2 enable as GPIO output
+	pio_set_output(PIOD, PIO_PD27, 0, 0, 0); // ENC2_ENABLE (low = enabled)
 
     /***********************
      * LED RING CONTROL - PD22/PWMH2

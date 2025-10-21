@@ -14,7 +14,11 @@ src\ASF\common\services\spi\sam_spi\spi_master.c
 
 src\ASF\sam\drivers\pio\pio_handler.c
 
+src\ASF\sam\drivers\pwm\pwm.c
+
 src\ASF\sam\drivers\spi\spi.c
+
+src\ASF\sam\drivers\tc\tc.c
 
 src\ASF\sam\drivers\twi\twi.c
 
@@ -37,8 +41,6 @@ src\can_app.c
 src\can_command_handler.c
 
 src\MC3419.c
-
-src\spi0.c
 
 src\tasks.c
 

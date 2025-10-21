@@ -12,7 +12,7 @@ int WIB_Init()
 	SystemInit();
 	board_init();
 	/* Replace with your application code */
-	spi0_init(1000000, false);   // 1 MHz, MSB-first (lsbfirst=false)
+	//spi0_init(1000000, false);   // 1 MHz, MSB-first (lsbfirst=false)
 								//initialise SPI0 interface for Load Cell ADS1120
 	//toolsense_init();			//Initialise GPIOs for sensing tool type
 	

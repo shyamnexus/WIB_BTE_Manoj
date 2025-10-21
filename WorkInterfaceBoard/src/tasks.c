@@ -61,13 +61,6 @@ void task_MC3419DAQ (void *arg)
 	
 	// Main task loop
 	while (1) {
-		// Check sensor status first
-		if (!mc3419_check_status()) {
-			volatile uint32_t debug_sensor_not_responding = 1;
-			vTaskDelay(pdMS_TO_TICKS(100)); // Wait longer if sensor not responding
-			continue;
-		}
-		
 		// Read sensor data
 		if (mc3419_read_data(&sensor_data) && sensor_data.valid) {
 			// Prepare accelerometer data payload (6 bytes: X, Y, Z)
@@ -107,6 +100,6 @@ void create_application_tasks(void)
 	
 	xTaskCreate(can_rx_task, "canrx", 512, 0, tskIDLE_PRIORITY+2, 0); // CAN RX handler task
 	xTaskCreate(can_status_task, "canstatus", 256, 0, tskIDLE_PRIORITY+1, 0); // CAN status monitoring task
-	xTaskCreate(task_test, "testTask", 512, 0, tskIDLE_PRIORITY+2, 0); // Load cell sampling task
+	//xTaskCreate(task_test, "testTask", 512, 0, tskIDLE_PRIORITY+2, 0); // Load cell sampling task
 	xTaskCreate (task_MC3419DAQ, "MC3419 Data  Acquisition" , 512 , 0,tskIDLE_PRIORITY+3 , 0);
 } // End create_application_tasks

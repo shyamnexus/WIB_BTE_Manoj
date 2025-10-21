@@ -38,10 +38,10 @@ int main (void)
 	/* Insert system clock initialization code here (sysclk_init()). */
 
 	sysclk_init(); // Initialize system clocks based on board configuration
-	board_init(); // Initialize board-specific pins/peripherals (as configured)
+//	board_init(); // Initialize board-specific pins/peripherals (as configured)
 	//ioport_init(); // Optional: initialize I/O port service if used
 
-	/* Initialize TIB hardware */
+	/* Initialize WIB hardware */
 	WIB_Init();
 	
 	/* Initialize CAN controller */

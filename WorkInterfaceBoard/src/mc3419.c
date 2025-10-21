@@ -324,7 +324,7 @@ bool mc3419_init(void)
 		volatile uint32_t debug_unexpected_whoami = 1;
 	}
 	
-	// Configure sensor for wake mode, 100Hz, ±8g range
+	// Configure sensor for wake mode, 100Hz, Â±8g range
 	config_data = MC3419_MODE_WAKE;
 	if (!MC3419_i2c_write(MC3419_REG_MODE, &config_data, 1)) {
 		volatile uint32_t debug_mode_write_failed = 1;
@@ -342,7 +342,7 @@ bool mc3419_init(void)
 	
 	delay_ms(10);
 	
-	// Set range to ±8g
+	// Set range to Â±8g
 	config_data = MC3419_RANGE_8G;
 	if (!MC3419_i2c_write(MC3419_REG_RANGE, &config_data, 1)) {
 		volatile uint32_t debug_range_write_failed = 1;
@@ -431,19 +431,19 @@ float mc3419_convert_accel_to_g(int16_t raw, uint8_t range)
 	// Determine scale factor based on range
 	switch (range) {
 		case MC3419_RANGE_2G:
-			scale_factor = 2.0f / 32768.0f; // ±2g range
+			scale_factor = 2.0f / 32768.0f; // Â±2g range
 			break;
 		case MC3419_RANGE_4G:
-			scale_factor = 4.0f / 32768.0f; // ±4g range
+			scale_factor = 4.0f / 32768.0f; // Â±4g range
 			break;
 		case MC3419_RANGE_8G:
-			scale_factor = 8.0f / 32768.0f; // ±8g range
+			scale_factor = 8.0f / 32768.0f; // Â±8g range
 			break;
 		case MC3419_RANGE_16G:
-			scale_factor = 16.0f / 32768.0f; // ±16g range
+			scale_factor = 16.0f / 32768.0f; // Â±16g range
 			break;
 		default:
-			scale_factor = 8.0f / 32768.0f; // Default to ±8g
+			scale_factor = 8.0f / 32768.0f; // Default to Â±8g
 			break;
 	}
 	
