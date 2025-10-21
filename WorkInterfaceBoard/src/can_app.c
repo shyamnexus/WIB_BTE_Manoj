@@ -210,7 +210,7 @@ bool can_app_init(void)
 	
 	// Enable CAN0 interrupt in NVIC to prevent system deadlock
 	// Set priority lower than encoder interrupts to avoid conflicts
-	NVIC_SetPriority(CAN0_IRQn, 6); // Lower priority than encoder (priority 5)
+	NVIC_SetPriority(CAN0_IRQn, 7); // Lower priority than encoder (priority 5)
 	NVIC_EnableIRQ(CAN0_IRQn);
 	
 	return true;

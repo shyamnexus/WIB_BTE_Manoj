@@ -135,6 +135,9 @@ void task_encoder(void *arg)
 	
 	// Main task loop
 	while (1) {
+		// Temporarily disable interrupts during data reading to ensure consistency
+		encoder_disable_interrupts_temporarily();
+		
 		// Read encoder data
 		if (encoder_read_data(&enc1_data, &enc2_data)) {
 			// Prepare encoder 1 data payload (8 bytes: position + velocity)
@@ -173,10 +176,50 @@ void task_encoder(void *arg)
 			volatile uint32_t debug_encoder_read_failed = 1;
 		}
 		
+		// Re-enable interrupts after data reading
+		encoder_enable_interrupts_after_critical();
+		
 		// Task delay for 50Hz sampling rate (20ms)
 		vTaskDelay(pdMS_TO_TICKS(20));
 	}
 }
+void task_interrupt_monitor(void *arg)
+{
+	(void)arg; // Unused parameter
+	uint32_t total_interrupts = 0;
+	uint32_t skipped_interrupts = 0;
+	uint32_t last_total = 0;
+	uint32_t last_skipped = 0;
+	
+	while (1) {
+		// Get current interrupt statistics
+		encoder_get_interrupt_stats(&total_interrupts, &skipped_interrupts);
+		
+		// Calculate interrupt rate (interrupts per second)
+		uint32_t interrupts_per_second = total_interrupts - last_total;
+		uint32_t skipped_per_second = skipped_interrupts - last_skipped;
+		
+		// Store debug information
+		volatile uint32_t debug_total_interrupts = total_interrupts;
+		volatile uint32_t debug_skipped_interrupts = skipped_interrupts;
+		volatile uint32_t debug_interrupts_per_second = interrupts_per_second;
+		volatile uint32_t debug_skipped_per_second = skipped_per_second;
+		
+		// If interrupt rate is too high, reset statistics to prevent overflow
+		if (total_interrupts > 10000) {
+			encoder_reset_interrupt_stats();
+			last_total = 0;
+			last_skipped = 0;
+		} else {
+			last_total = total_interrupts;
+			last_skipped = skipped_interrupts;
+		}
+		
+		// Monitor every 5 seconds
+		vTaskDelay(pdMS_TO_TICKS(5000));
+	}
+}
+
 void create_application_tasks(void)
 {
 	
@@ -185,4 +228,5 @@ void create_application_tasks(void)
 	//xTaskCreate(task_test, "testTask", 512, 0, tskIDLE_PRIORITY+2, 0); // Load cell sampling task
 	xTaskCreate (task_MC3419DAQ, "MC3419 Data  Acquisition" , 512 , 0,tskIDLE_PRIORITY+3 , 0);
 	xTaskCreate(task_encoder, "encoder", 512, 0, tskIDLE_PRIORITY+2, 0); // Encoder reading task
+	xTaskCreate(task_interrupt_monitor, "intmonitor", 256, 0, tskIDLE_PRIORITY+1, 0); // Interrupt monitoring task
 } // End create_application_tasks
