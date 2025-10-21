@@ -217,6 +217,27 @@ void PIOA_Handler(void)
 void PIOB_Handler(void)
 {
     pio_handler_process(PIOB, ID_PIOB);
+    
+    // Check if any PIOB interrupt handlers are registered
+    uint32_t i;
+    bool has_piob_handlers = false;
+    for (i = 0; i < gs_ul_nb_sources; i++) {
+        if (gs_interrupt_sources[i].id == ID_PIOB) {
+            has_piob_handlers = true;
+            break;
+        }
+    }
+    
+    // If no PIOB handlers are registered, clear interrupt status and disable interrupts
+    if (!has_piob_handlers) {
+        uint32_t status = pio_get_interrupt_status(PIOB);
+        if (status != 0) {
+            // Clear the interrupt status by reading it again
+            pio_get_interrupt_status(PIOB);
+        }
+        // Disable PIOB interrupts in NVIC to prevent continuous triggering
+        NVIC_DisableIRQ(PIOB_IRQn);
+    }
 }
 #endif
 
