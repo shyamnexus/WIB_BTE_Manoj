@@ -29,9 +29,16 @@ static volatile bool encoder_initialized = false;
 static volatile uint8_t enc1_state = 0;
 static volatile uint8_t enc2_state = 0;
 
-// Interrupt rate limiting
+// Batch processing for efficiency
+static volatile int32_t enc1_pending_changes = 0;
+static volatile int32_t enc2_pending_changes = 0;
+
+// Interrupt rate limiting and filtering
 static volatile uint32_t last_interrupt_time = 0;
-#define MIN_INTERRUPT_INTERVAL_MS 2  // Minimum 2ms between interrupts
+static volatile uint32_t interrupt_count = 0;
+static volatile uint32_t skipped_interrupts = 0;
+#define MIN_INTERRUPT_INTERVAL_MS 5  // Minimum 5ms between interrupts (200Hz max)
+#define MAX_INTERRUPTS_PER_SECOND 100  // Maximum 100 interrupts per second
 
 // Encoder interrupt handlers
 void PIOA_Handler_WIB(void)
@@ -46,9 +53,28 @@ void PIOA_Handler_WIB(void)
     // Rate limiting - prevent excessive interrupt frequency
     uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
     if (current_time - last_interrupt_time < MIN_INTERRUPT_INTERVAL_MS) {
+        skipped_interrupts++;
         return; // Skip this interrupt if too frequent
     }
+    
+    // Additional rate limiting: check if we're exceeding maximum interrupts per second
+    interrupt_count++;
+    if (interrupt_count > MAX_INTERRUPTS_PER_SECOND) {
+        // Reset counter every second
+        if (current_time - last_interrupt_time > 1000) {
+            interrupt_count = 0;
+            skipped_interrupts = 0;
+        } else {
+            skipped_interrupts++;
+            return; // Skip if exceeding rate limit
+        }
+    }
+    
     last_interrupt_time = current_time;
+    
+    // Process only the encoder that actually changed to reduce processing time
+    bool enc1_changed = false;
+    bool enc2_changed = false;
     
     // Handle ENC1 interrupts - only process if either A or B changed
     if (status & (PIO_PA5 | PIO_PA1)) { // ENC1_A or ENC1_B
@@ -58,17 +84,18 @@ void PIOA_Handler_WIB(void)
         
         // Only process if state actually changed
         if (new_state != enc1_state) {
-            // Quadrature decoding
-            if (enc1_state == 0 && new_state == 1) enc1_position++;
-            else if (enc1_state == 1 && new_state == 3) enc1_position++;
-            else if (enc1_state == 3 && new_state == 2) enc1_position++;
-            else if (enc1_state == 2 && new_state == 0) enc1_position++;
-            else if (enc1_state == 0 && new_state == 2) enc1_position--;
-            else if (enc1_state == 2 && new_state == 3) enc1_position--;
-            else if (enc1_state == 3 && new_state == 1) enc1_position--;
-            else if (enc1_state == 1 && new_state == 0) enc1_position--;
+            // Quadrature decoding - accumulate changes for batch processing
+            if (enc1_state == 0 && new_state == 1) enc1_pending_changes++;
+            else if (enc1_state == 1 && new_state == 3) enc1_pending_changes++;
+            else if (enc1_state == 3 && new_state == 2) enc1_pending_changes++;
+            else if (enc1_state == 2 && new_state == 0) enc1_pending_changes++;
+            else if (enc1_state == 0 && new_state == 2) enc1_pending_changes--;
+            else if (enc1_state == 2 && new_state == 3) enc1_pending_changes--;
+            else if (enc1_state == 3 && new_state == 1) enc1_pending_changes--;
+            else if (enc1_state == 1 && new_state == 0) enc1_pending_changes--;
             
             enc1_state = new_state;
+            enc1_changed = true;
         }
     }
     
@@ -80,18 +107,25 @@ void PIOA_Handler_WIB(void)
         
         // Only process if state actually changed
         if (new_state != enc2_state) {
-            // Quadrature decoding
-            if (enc2_state == 0 && new_state == 1) enc2_position++;
-            else if (enc2_state == 1 && new_state == 3) enc2_position++;
-            else if (enc2_state == 3 && new_state == 2) enc2_position++;
-            else if (enc2_state == 2 && new_state == 0) enc2_position++;
-            else if (enc2_state == 0 && new_state == 2) enc2_position--;
-            else if (enc2_state == 2 && new_state == 3) enc2_position--;
-            else if (enc2_state == 3 && new_state == 1) enc2_position--;
-            else if (enc2_state == 1 && new_state == 0) enc2_position--;
+            // Quadrature decoding - accumulate changes for batch processing
+            if (enc2_state == 0 && new_state == 1) enc2_pending_changes++;
+            else if (enc2_state == 1 && new_state == 3) enc2_pending_changes++;
+            else if (enc2_state == 3 && new_state == 2) enc2_pending_changes++;
+            else if (enc2_state == 2 && new_state == 0) enc2_pending_changes++;
+            else if (enc2_state == 0 && new_state == 2) enc2_pending_changes--;
+            else if (enc2_state == 2 && new_state == 3) enc2_pending_changes--;
+            else if (enc2_state == 3 && new_state == 1) enc2_pending_changes--;
+            else if (enc2_state == 1 && new_state == 0) enc2_pending_changes--;
             
             enc2_state = new_state;
+            enc2_changed = true;
         }
+    }
+    
+    // If no encoders changed, this was likely a spurious interrupt
+    if (!enc1_changed && !enc2_changed) {
+        // Clear any pending interrupts to prevent continuous triggering
+        pio_get_interrupt_status(PIOA);
     }
 }
 
@@ -102,12 +136,16 @@ bool encoder_init(void)
     pmc_enable_periph_clk(ID_PIOA);
     pmc_enable_periph_clk(ID_PIOD);
     
-    // Configure encoder pins as inputs with pull-ups
+    // Configure encoder pins as inputs with pull-ups and proper debouncing
     // ENC1: PA5 (A) and PA1 (B)
     pio_configure(PIOA, PIO_INPUT, PIO_PA5 | PIO_PA1, PIO_PULLUP | PIO_DEBOUNCE);
     
     // ENC2: PA15 (A) and PA16 (B)
     pio_configure(PIOA, PIO_INPUT, PIO_PA15 | PIO_PA16, PIO_PULLUP | PIO_DEBOUNCE);
+    
+    // Configure debouncing filter for encoder signals (filter out noise < 1kHz)
+    // This helps reduce spurious interrupts from electrical noise
+    pio_set_debounce_filter(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, 1000);
     
     // Configure encoder enable pins
     // ENC1_ENABLE: PD17
@@ -143,8 +181,8 @@ bool encoder_init(void)
     pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, PIOA_Handler_WIB);
     
     // Set interrupt priority to allow FreeRTOS tasks to run
-    // Set higher priority than CAN interrupts to prevent conflicts
-    NVIC_SetPriority(PIOA_IRQn, 4); // Higher priority than CAN (priority 6)
+    // Set lower priority than system critical interrupts but higher than CAN
+    NVIC_SetPriority(PIOA_IRQn, 5); // Balanced priority - not too high to block system
     
     // Don't enable interrupts yet - wait for FreeRTOS tasks to start
     // Interrupts will be enabled later via encoder_enable_interrupts()
@@ -154,12 +192,29 @@ bool encoder_init(void)
     return true;
 }
 
+// Apply pending changes to position counters
+static void encoder_apply_pending_changes(void)
+{
+    // Apply pending changes atomically
+    if (enc1_pending_changes != 0) {
+        enc1_position += enc1_pending_changes;
+        enc1_pending_changes = 0;
+    }
+    if (enc2_pending_changes != 0) {
+        enc2_position += enc2_pending_changes;
+        enc2_pending_changes = 0;
+    }
+}
+
 // Read encoder data
 bool encoder_read_data(encoder_data_t* enc1_data, encoder_data_t* enc2_data)
 {
     if (!encoder_initialized || !enc1_data || !enc2_data) {
         return false;
     }
+    
+    // Apply any pending changes from interrupts
+    encoder_apply_pending_changes();
     
     uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
     
@@ -209,9 +264,11 @@ void encoder_reset_counters(void)
         return;
     }
     
-    // Reset position counters
+    // Reset position counters and pending changes
     enc1_position = 0;
     enc2_position = 0;
+    enc1_pending_changes = 0;
+    enc2_pending_changes = 0;
     enc1_last_position = 0;
     enc2_last_position = 0;
     enc1_last_timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS;
@@ -275,4 +332,39 @@ bool encoder_interrupts_enabled(void)
         return false;
     }
     return NVIC_GetEnableIRQ(PIOA_IRQn) != 0;
+}
+
+// Get interrupt statistics for debugging
+void encoder_get_interrupt_stats(uint32_t* total_interrupts, uint32_t* skipped_interrupts_count)
+{
+    if (total_interrupts) {
+        *total_interrupts = interrupt_count;
+    }
+    if (skipped_interrupts_count) {
+        *skipped_interrupts_count = skipped_interrupts;
+    }
+}
+
+// Reset interrupt statistics
+void encoder_reset_interrupt_stats(void)
+{
+    interrupt_count = 0;
+    skipped_interrupts = 0;
+    last_interrupt_time = 0;
+}
+
+// Temporarily disable interrupts for critical operations
+void encoder_disable_interrupts_temporarily(void)
+{
+    if (encoder_initialized) {
+        pio_disable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
+    }
+}
+
+// Re-enable interrupts after critical operations
+void encoder_enable_interrupts_after_critical(void)
+{
+    if (encoder_initialized) {
+        pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
+    }
 }

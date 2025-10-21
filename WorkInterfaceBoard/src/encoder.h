@@ -29,6 +29,10 @@ int32_t encoder_get_velocity(uint8_t encoder_num);
 void encoder_enable_interrupts(void);
 void encoder_disable_interrupts(void);
 bool encoder_interrupts_enabled(void);
+void encoder_get_interrupt_stats(uint32_t* total_interrupts, uint32_t* skipped_interrupts_count);
+void encoder_reset_interrupt_stats(void);
+void encoder_disable_interrupts_temporarily(void);
+void encoder_enable_interrupts_after_critical(void);
 
 #ifdef __cplusplus
 }
