@@ -5,6 +5,7 @@
  *  Author: MKumar
  */ 
 #include "WIB_Init.h"
+#include "encoder.h"
 int tool_type = 9;
 
 int WIB_Init()
@@ -22,7 +23,8 @@ int WIB_Init()
 	
 	// Initialize I2C0 at 100kHz
 
-	
+	// Initialize encoder hardware
+	encoder_init();
 
 	return 0;  // Success
 }
