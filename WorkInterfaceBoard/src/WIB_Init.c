@@ -23,8 +23,8 @@ int WIB_Init()
 	
 	// Initialize I2C0 at 100kHz
 
-	// Initialize encoder hardware
-	encoder_init();
+	// Note: Encoder hardware will be initialized in the encoder task
+	// to avoid interrupt conflicts during system startup
 
 	return 0;  // Success
 }

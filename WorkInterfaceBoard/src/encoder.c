@@ -29,83 +29,69 @@ static volatile bool encoder_initialized = false;
 static volatile uint8_t enc1_state = 0;
 static volatile uint8_t enc2_state = 0;
 
+// Interrupt rate limiting
+static volatile uint32_t last_interrupt_time = 0;
+#define MIN_INTERRUPT_INTERVAL_MS 2  // Minimum 2ms between interrupts
+
 // Encoder interrupt handlers
 void PIOA_Handler_WIB(void)
 {
+    // Don't process interrupts if encoder not initialized
+    if (!encoder_initialized) {
+        return;
+    }
+    
     uint32_t status = pio_get_interrupt_status(PIOA);
     
-    // Handle ENC1 interrupts
-    if (status & PIO_PA5) { // ENC1_A
+    // Rate limiting - prevent excessive interrupt frequency
+    uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (current_time - last_interrupt_time < MIN_INTERRUPT_INTERVAL_MS) {
+        return; // Skip this interrupt if too frequent
+    }
+    last_interrupt_time = current_time;
+    
+    // Handle ENC1 interrupts - only process if either A or B changed
+    if (status & (PIO_PA5 | PIO_PA1)) { // ENC1_A or ENC1_B
         uint8_t a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
         uint8_t b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
         uint8_t new_state = (a_state << 1) | b_state;
         
-        // Quadrature decoding
-        if (enc1_state == 0 && new_state == 1) enc1_position++;
-        else if (enc1_state == 1 && new_state == 3) enc1_position++;
-        else if (enc1_state == 3 && new_state == 2) enc1_position++;
-        else if (enc1_state == 2 && new_state == 0) enc1_position++;
-        else if (enc1_state == 0 && new_state == 2) enc1_position--;
-        else if (enc1_state == 2 && new_state == 3) enc1_position--;
-        else if (enc1_state == 3 && new_state == 1) enc1_position--;
-        else if (enc1_state == 1 && new_state == 0) enc1_position--;
-        
-        enc1_state = new_state;
+        // Only process if state actually changed
+        if (new_state != enc1_state) {
+            // Quadrature decoding
+            if (enc1_state == 0 && new_state == 1) enc1_position++;
+            else if (enc1_state == 1 && new_state == 3) enc1_position++;
+            else if (enc1_state == 3 && new_state == 2) enc1_position++;
+            else if (enc1_state == 2 && new_state == 0) enc1_position++;
+            else if (enc1_state == 0 && new_state == 2) enc1_position--;
+            else if (enc1_state == 2 && new_state == 3) enc1_position--;
+            else if (enc1_state == 3 && new_state == 1) enc1_position--;
+            else if (enc1_state == 1 && new_state == 0) enc1_position--;
+            
+            enc1_state = new_state;
+        }
     }
     
-    if (status & PIO_PA1) { // ENC1_B
-        uint8_t a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
-        uint8_t b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
-        uint8_t new_state = (a_state << 1) | b_state;
-        
-        // Quadrature decoding
-        if (enc1_state == 0 && new_state == 1) enc1_position++;
-        else if (enc1_state == 1 && new_state == 3) enc1_position++;
-        else if (enc1_state == 3 && new_state == 2) enc1_position++;
-        else if (enc1_state == 2 && new_state == 0) enc1_position++;
-        else if (enc1_state == 0 && new_state == 2) enc1_position--;
-        else if (enc1_state == 2 && new_state == 3) enc1_position--;
-        else if (enc1_state == 3 && new_state == 1) enc1_position--;
-        else if (enc1_state == 1 && new_state == 0) enc1_position--;
-        
-        enc1_state = new_state;
-    }
-    
-    // Handle ENC2 interrupts
-    if (status & PIO_PA15) { // ENC2_A
+    // Handle ENC2 interrupts - only process if either A or B changed
+    if (status & (PIO_PA15 | PIO_PA16)) { // ENC2_A or ENC2_B
         uint8_t a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
         uint8_t b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
         uint8_t new_state = (a_state << 1) | b_state;
         
-        // Quadrature decoding
-        if (enc2_state == 0 && new_state == 1) enc2_position++;
-        else if (enc2_state == 1 && new_state == 3) enc2_position++;
-        else if (enc2_state == 3 && new_state == 2) enc2_position++;
-        else if (enc2_state == 2 && new_state == 0) enc2_position++;
-        else if (enc2_state == 0 && new_state == 2) enc2_position--;
-        else if (enc2_state == 2 && new_state == 3) enc2_position--;
-        else if (enc2_state == 3 && new_state == 1) enc2_position--;
-        else if (enc2_state == 1 && new_state == 0) enc2_position--;
-        
-        enc2_state = new_state;
-    }
-    
-    if (status & PIO_PA16) { // ENC2_B
-        uint8_t a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
-        uint8_t b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
-        uint8_t new_state = (a_state << 1) | b_state;
-        
-        // Quadrature decoding
-        if (enc2_state == 0 && new_state == 1) enc2_position++;
-        else if (enc2_state == 1 && new_state == 3) enc2_position++;
-        else if (enc2_state == 3 && new_state == 2) enc2_position++;
-        else if (enc2_state == 2 && new_state == 0) enc2_position++;
-        else if (enc2_state == 0 && new_state == 2) enc2_position--;
-        else if (enc2_state == 2 && new_state == 3) enc2_position--;
-        else if (enc2_state == 3 && new_state == 1) enc2_position--;
-        else if (enc2_state == 1 && new_state == 0) enc2_position--;
-        
-        enc2_state = new_state;
+        // Only process if state actually changed
+        if (new_state != enc2_state) {
+            // Quadrature decoding
+            if (enc2_state == 0 && new_state == 1) enc2_position++;
+            else if (enc2_state == 1 && new_state == 3) enc2_position++;
+            else if (enc2_state == 3 && new_state == 2) enc2_position++;
+            else if (enc2_state == 2 && new_state == 0) enc2_position++;
+            else if (enc2_state == 0 && new_state == 2) enc2_position--;
+            else if (enc2_state == 2 && new_state == 3) enc2_position--;
+            else if (enc2_state == 3 && new_state == 1) enc2_position--;
+            else if (enc2_state == 1 && new_state == 0) enc2_position--;
+            
+            enc2_state = new_state;
+        }
     }
 }
 
@@ -132,13 +118,7 @@ bool encoder_init(void)
     pio_configure(PIOD, PIO_OUTPUT_0, PIO_PD27, 0);
     pio_set(PIOD, PIO_PD27); // Enable encoder 2
     
-    // Configure interrupts for encoder pins
-    pio_set_input(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_PULLUP | PIO_DEBOUNCE);
-    pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, PIOA_Handler_WIB);
-    pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
-    NVIC_EnableIRQ(PIOA_IRQn);
-    
-    // Initialize position tracking variables
+    // Initialize position tracking variables first
     enc1_position = 0;
     enc2_position = 0;
     enc1_last_position = 0;
@@ -147,6 +127,26 @@ bool encoder_init(void)
     enc2_last_timestamp = 0;
     enc1_state = 0;
     enc2_state = 0;
+    last_interrupt_time = 0;
+    
+    // Read initial encoder states
+    uint8_t enc1_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
+    uint8_t enc1_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+    enc1_state = (enc1_a << 1) | enc1_b;
+    
+    uint8_t enc2_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
+    uint8_t enc2_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
+    enc2_state = (enc2_a << 1) | enc2_b;
+    
+    // Configure interrupts for encoder pins with proper debouncing
+    pio_set_input(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_PULLUP | PIO_DEBOUNCE);
+    pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, PIOA_Handler_WIB);
+    
+    // Set interrupt priority to allow FreeRTOS tasks to run
+    NVIC_SetPriority(PIOA_IRQn, 5); // Lower priority (higher number = lower priority)
+    
+    // Don't enable interrupts yet - wait for FreeRTOS tasks to start
+    // Interrupts will be enabled later via encoder_enable_interrupts()
     
     encoder_initialized = true;
     
@@ -239,4 +239,31 @@ int32_t encoder_get_velocity(uint8_t encoder_num)
     // This is a simplified version - for accurate velocity calculation,
     // use the encoder_read_data function which tracks velocity over time
     return 0;
+}
+
+// Enable encoder interrupts
+void encoder_enable_interrupts(void)
+{
+    if (encoder_initialized) {
+        pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
+        NVIC_EnableIRQ(PIOA_IRQn);
+    }
+}
+
+// Disable encoder interrupts
+void encoder_disable_interrupts(void)
+{
+    if (encoder_initialized) {
+        pio_disable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
+        NVIC_DisableIRQ(PIOA_IRQn);
+    }
+}
+
+// Check if encoder interrupts are enabled
+bool encoder_interrupts_enabled(void)
+{
+    if (!encoder_initialized) {
+        return false;
+    }
+    return NVIC_GetEnableIRQ(PIOA_IRQn) != 0;
 }
