@@ -27,6 +27,9 @@ void can_status_task(void *arg); // FreeRTOS task for periodic CAN status monito
 void can_diagnostic_info(void); // Comprehensive CAN diagnostic information
 bool can_app_simple_test(void); // Simple CAN controller state test for debugging
 bool can_verify_bitrate(uint32_t expected_kbps); // Verify CAN bit rate configuration
+void CAN0_Handler(void); // CAN0 interrupt handler to prevent system deadlock
+void can_disable_interrupts(void); // Disable CAN interrupts
+void can_enable_interrupts(void); // Enable CAN interrupts
 
 #ifdef __cplusplus
 }
