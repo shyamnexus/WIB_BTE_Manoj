@@ -46,6 +46,9 @@ static volatile uint32_t last_interrupt_mask = 0;
 // Encoder interrupt handler
 void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
 {
+    // Debug: Mark that interrupt handler was called
+    volatile uint32_t debug_interrupt_called = 1;
+    
     // Don't process interrupts if encoder not initialized
     if (!encoder_initialized) {
         return;
@@ -219,7 +222,10 @@ bool encoder_init(void)
     pio_configure_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE);
     
     // Register our interrupt handler with the ASF PIO handler system
-    pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, encoder_interrupt_handler);
+    uint32_t handler_result = pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, encoder_interrupt_handler);
+    
+    // Debug: Check if handler registration was successful
+    volatile uint32_t debug_handler_registered = (handler_result == 0) ? 1 : 0;
     
     // Set interrupt priority to allow FreeRTOS tasks to run
     // Set lower priority than CAN to prevent conflicts
