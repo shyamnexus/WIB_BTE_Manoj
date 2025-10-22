@@ -41,15 +41,19 @@ static volatile uint32_t skipped_interrupts = 0;
 static volatile uint32_t consecutive_interrupts = 0;
 static volatile uint32_t last_interrupt_mask = 0;
 static volatile uint32_t debug_interrupts_processed = 0;
-#define MIN_INTERRUPT_INTERVAL_MS 1  // Minimum 1ms between interrupts (1000Hz max)
-#define MAX_INTERRUPTS_PER_SECOND 500  // Maximum 500 interrupts per second
-#define MAX_CONSECUTIVE_INTERRUPTS 20  // Maximum consecutive interrupts before disabling
+#define MIN_INTERRUPT_INTERVAL_MS 0  // No minimum interval for testing
+#define MAX_INTERRUPTS_PER_SECOND 10000  // Much higher limit for testing
+#define MAX_CONSECUTIVE_INTERRUPTS 100  // Much higher limit for testing
+
+// Global interrupt call counter for diagnostics
+volatile uint32_t debug_interrupt_called_count = 0;
 
 // Encoder interrupt handler
 void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
 {
     // Debug: Mark that interrupt handler was called
-    volatile uint32_t debug_interrupt_called = 1;
+    debug_interrupt_called_count++;
+    volatile uint32_t debug_interrupt_called = debug_interrupt_called_count;
     
     // Don't process interrupts if encoder not initialized
     if (!encoder_initialized) {
@@ -70,39 +74,17 @@ void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
     // Don't disable interrupts based on connection detection during interrupt handling
     // This can cause encoder updates to be missed during normal operation
     
-    // Rate limiting - prevent excessive interrupt frequency
+    // DIAGNOSTIC: Simplified rate limiting for testing
     uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    
+    // Only apply minimal rate limiting
     if (current_time - last_interrupt_time < MIN_INTERRUPT_INTERVAL_MS) {
         skipped_interrupts++;
         return; // Skip this interrupt if too frequent
     }
     
-    // Check for interrupt loop - if same mask keeps triggering, disable interrupts
-    if (ul_mask == last_interrupt_mask) {
-        consecutive_interrupts++;
-        if (consecutive_interrupts > MAX_CONSECUTIVE_INTERRUPTS) {
-            // Too many consecutive interrupts with same mask - disable to prevent loop
-            encoder_disable_interrupts();
-            return;
-        }
-    } else {
-        consecutive_interrupts = 0;
-        last_interrupt_mask = ul_mask;
-    }
-    
-    // Additional rate limiting: check if we're exceeding maximum interrupts per second
+    // Track interrupt count but don't disable based on it
     interrupt_count++;
-    if (interrupt_count > MAX_INTERRUPTS_PER_SECOND) {
-        // Reset counter every second
-        if (current_time - last_interrupt_time > 1000) {
-            interrupt_count = 0;
-            skipped_interrupts = 0;
-        } else {
-            skipped_interrupts++;
-            return; // Skip if exceeding rate limit
-        }
-    }
-    
     last_interrupt_time = current_time;
     
     // Process only the encoder that actually changed to reduce processing time
@@ -120,21 +102,31 @@ void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
         
         // Only process if state actually changed
         if (new_state != enc1_state) {
-            // Quadrature decoding - accumulate changes for batch processing
-            if (enc1_state == 0 && new_state == 1) enc1_pending_changes++;
-            else if (enc1_state == 1 && new_state == 3) enc1_pending_changes++;
-            else if (enc1_state == 3 && new_state == 2) enc1_pending_changes++;
-            else if (enc1_state == 2 && new_state == 0) enc1_pending_changes++;
-            else if (enc1_state == 0 && new_state == 2) enc1_pending_changes--;
-            else if (enc1_state == 2 && new_state == 3) enc1_pending_changes--;
-            else if (enc1_state == 3 && new_state == 1) enc1_pending_changes--;
-            else if (enc1_state == 1 && new_state == 0) enc1_pending_changes--;
-            
-            enc1_state = new_state;
-            enc1_changed = true;
-            
-            // Debug: Track when encoder 1 state changes
-            volatile uint32_t debug_enc1_state_changes = 1;
+            // DIAGNOSTIC: Simplified quadrature decoding for testing
+            // Just track any state change as a movement
+            if (new_state != enc1_state) {
+                // Simple increment/decrement based on direction
+                // This is a simplified approach for testing
+                if ((enc1_state == 0 && new_state == 1) ||
+                    (enc1_state == 1 && new_state == 3) ||
+                    (enc1_state == 3 && new_state == 2) ||
+                    (enc1_state == 2 && new_state == 0)) {
+                    enc1_pending_changes++;
+                } else if ((enc1_state == 0 && new_state == 2) ||
+                          (enc1_state == 2 && new_state == 3) ||
+                          (enc1_state == 3 && new_state == 1) ||
+                          (enc1_state == 1 && new_state == 0)) {
+                    enc1_pending_changes--;
+                }
+                
+                // Debug: Track when encoder 1 state changes
+                volatile uint32_t debug_enc1_state_changes = 1;
+                volatile uint32_t debug_enc1_new_state = new_state;
+                volatile uint32_t debug_enc1_old_state = enc1_state;
+                
+                enc1_state = new_state;
+                enc1_changed = true;
+            }
         }
     }
     
@@ -146,21 +138,31 @@ void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
         
         // Only process if state actually changed
         if (new_state != enc2_state) {
-            // Quadrature decoding - accumulate changes for batch processing
-            if (enc2_state == 0 && new_state == 1) enc2_pending_changes++;
-            else if (enc2_state == 1 && new_state == 3) enc2_pending_changes++;
-            else if (enc2_state == 3 && new_state == 2) enc2_pending_changes++;
-            else if (enc2_state == 2 && new_state == 0) enc2_pending_changes++;
-            else if (enc2_state == 0 && new_state == 2) enc2_pending_changes--;
-            else if (enc2_state == 2 && new_state == 3) enc2_pending_changes--;
-            else if (enc2_state == 3 && new_state == 1) enc2_pending_changes--;
-            else if (enc2_state == 1 && new_state == 0) enc2_pending_changes--;
-            
-            enc2_state = new_state;
-            enc2_changed = true;
-            
-            // Debug: Track when encoder 2 state changes
-            volatile uint32_t debug_enc2_state_changes = 1;
+            // DIAGNOSTIC: Simplified quadrature decoding for testing
+            // Just track any state change as a movement
+            if (new_state != enc2_state) {
+                // Simple increment/decrement based on direction
+                // This is a simplified approach for testing
+                if ((enc2_state == 0 && new_state == 1) ||
+                    (enc2_state == 1 && new_state == 3) ||
+                    (enc2_state == 3 && new_state == 2) ||
+                    (enc2_state == 2 && new_state == 0)) {
+                    enc2_pending_changes++;
+                } else if ((enc2_state == 0 && new_state == 2) ||
+                          (enc2_state == 2 && new_state == 3) ||
+                          (enc2_state == 3 && new_state == 1) ||
+                          (enc2_state == 1 && new_state == 0)) {
+                    enc2_pending_changes--;
+                }
+                
+                // Debug: Track when encoder 2 state changes
+                volatile uint32_t debug_enc2_state_changes = 1;
+                volatile uint32_t debug_enc2_new_state = new_state;
+                volatile uint32_t debug_enc2_old_state = enc2_state;
+                
+                enc2_state = new_state;
+                enc2_changed = true;
+            }
         }
     }
     
@@ -517,13 +519,9 @@ bool encoder_is_connected(void)
     bool enc1_stable = (enc1_a_1 == enc1_a_2) && (enc1_b_1 == enc1_b_2);
     bool enc2_stable = (enc2_a_1 == enc2_a_2) && (enc2_b_1 == enc2_b_2);
     
-    // If pins are stable, consider encoder connected
-    // Don't disable interrupts based on pin states alone as this can cause false negatives
-    // during normal encoder operation when pins might be in the same state briefly
-    bool enc1_connected = enc1_stable;
-    bool enc2_connected = enc2_stable;
-    
-    return enc1_connected || enc2_connected;
+    // DIAGNOSTIC: Always return true to prevent connection detection from disabling interrupts
+    // This allows us to test if the connection detection is the issue
+    return true; // enc1_stable || enc2_stable;
 }
 
 // Monitor encoder connection and disable interrupts if no encoder detected
@@ -653,4 +651,90 @@ uint32_t encoder_get_debug_interrupt_count(void)
 uint32_t encoder_get_debug_position_changes(void)
 {
     return debug_position_changes;
+}
+
+// DIAGNOSTIC: Get raw pin states for debugging
+void encoder_get_raw_pin_states(uint8_t* enc1_a, uint8_t* enc1_b, uint8_t* enc2_a, uint8_t* enc2_b)
+{
+    if (enc1_a) *enc1_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
+    if (enc1_b) *enc1_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+    if (enc2_a) *enc2_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
+    if (enc2_b) *enc2_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
+}
+
+// DIAGNOSTIC: Get current encoder states
+void encoder_get_current_states(uint8_t* enc1_state, uint8_t* enc2_state)
+{
+    if (enc1_state) *enc1_state = enc1_state;
+    if (enc2_state) *enc2_state = enc2_state;
+}
+
+// DIAGNOSTIC: Force enable interrupts regardless of connection status
+void encoder_force_enable_for_testing(void)
+{
+    if (encoder_initialized) {
+        // Reset all interrupt detection variables
+        consecutive_interrupts = 0;
+        last_interrupt_mask = 0;
+        interrupt_count = 0;
+        skipped_interrupts = 0;
+        
+        // Clear any pending interrupts
+        volatile uint32_t clear_status = pio_get_interrupt_status(PIOA);
+        (void)clear_status;
+        
+        // Force enable interrupts
+        pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
+        NVIC_EnableIRQ(PIOA_IRQn);
+        
+        // Debug flag
+        volatile uint32_t debug_force_enabled = 1;
+    }
+}
+
+// DIAGNOSTIC: Simplified interrupt handler for testing
+void encoder_simple_test_handler(uint32_t ul_id, uint32_t ul_mask)
+{
+    // Simple test - just increment a counter when any encoder pin changes
+    static volatile uint32_t simple_test_count = 0;
+    simple_test_count++;
+    
+    // Clear interrupt status
+    volatile uint32_t status = pio_get_interrupt_status(PIOA);
+    (void)status;
+    
+    // Debug: Store which pins triggered
+    volatile uint32_t debug_triggered_pins = ul_mask;
+}
+
+// DIAGNOSTIC: Get simple test count
+uint32_t encoder_get_simple_test_count(void)
+{
+    static volatile uint32_t simple_test_count = 0;
+    return simple_test_count;
+}
+
+// DIAGNOSTIC: Get interrupt call count
+uint32_t encoder_get_interrupt_call_count(void)
+{
+    extern volatile uint32_t debug_interrupt_called_count;
+    return debug_interrupt_called_count;
+}
+
+// DIAGNOSTIC: Test encoder enable pins
+void encoder_test_enable_pins(void)
+{
+    if (!encoder_initialized) return;
+    
+    // Toggle encoder enable pins to test if they're working
+    pio_clear(PIOD, PIO_PD17); // Disable encoder 1
+    for (volatile int i = 0; i < 1000; i++); // Small delay
+    pio_set(PIOD, PIO_PD17);   // Enable encoder 1
+    
+    pio_clear(PIOD, PIO_PD27); // Disable encoder 2
+    for (volatile int i = 0; i < 1000; i++); // Small delay
+    pio_set(PIOD, PIO_PD27);   // Enable encoder 2
+    
+    // Debug flag
+    volatile uint32_t debug_enable_pins_toggled = 1;
 }

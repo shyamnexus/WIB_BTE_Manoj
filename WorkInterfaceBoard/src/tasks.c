@@ -236,6 +236,67 @@ void task_interrupt_monitor(void *arg)
 	}
 }
 
+// DIAGNOSTIC: Simple encoder test task
+void task_encoder_diagnostic(void *arg)
+{
+    (void)arg;
+    
+    // Wait for encoder to be initialized
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    
+    // Force enable interrupts for testing
+    encoder_force_enable_for_testing();
+    
+    // Test encoder enable pins
+    encoder_test_enable_pins();
+    
+    uint8_t enc1_a, enc1_b, enc2_a, enc2_b;
+    uint8_t enc1_state, enc2_state;
+    uint32_t simple_test_count = 0;
+    uint32_t last_simple_count = 0;
+    uint32_t interrupt_call_count = 0;
+    uint32_t last_interrupt_count = 0;
+    
+    while (1) {
+        // Get raw pin states
+        encoder_get_raw_pin_states(&enc1_a, &enc1_b, &enc2_a, &enc2_b);
+        
+        // Get current encoder states
+        encoder_get_current_states(&enc1_state, &enc2_state);
+        
+        // Get simple test count
+        simple_test_count = encoder_get_simple_test_count();
+        
+        // Get interrupt call count
+        interrupt_call_count = encoder_get_interrupt_call_count();
+        
+        // Store diagnostic information
+        volatile uint8_t debug_enc1_a = enc1_a;
+        volatile uint8_t debug_enc1_b = enc1_b;
+        volatile uint8_t debug_enc2_a = enc2_a;
+        volatile uint8_t debug_enc2_b = enc2_b;
+        volatile uint8_t debug_enc1_state = enc1_state;
+        volatile uint8_t debug_enc2_state = enc2_state;
+        volatile uint32_t debug_simple_test_count = simple_test_count;
+        volatile uint32_t debug_simple_test_delta = simple_test_count - last_simple_count;
+        volatile uint32_t debug_interrupt_call_count = interrupt_call_count;
+        volatile uint32_t debug_interrupt_call_delta = interrupt_call_count - last_interrupt_count;
+        
+        last_simple_count = simple_test_count;
+        last_interrupt_count = interrupt_call_count;
+        
+        // Check if interrupts are enabled
+        bool interrupts_enabled = encoder_interrupts_enabled();
+        volatile uint32_t debug_interrupts_enabled = interrupts_enabled ? 1 : 0;
+        
+        // Check if encoder is connected
+        bool encoder_connected = encoder_is_connected();
+        volatile uint32_t debug_encoder_connected = encoder_connected ? 1 : 0;
+        
+        vTaskDelay(pdMS_TO_TICKS(100)); // Update every 100ms
+    }
+}
+
 void create_application_tasks(void)
 {
 	
@@ -245,4 +306,5 @@ void create_application_tasks(void)
 	xTaskCreate (task_MC3419DAQ, "MC3419 Data  Acquisition" , 512 , 0,tskIDLE_PRIORITY+3 , 0);
 	xTaskCreate(task_encoder, "encoder", 512, 0, tskIDLE_PRIORITY+2, 0); // Encoder reading task
 	xTaskCreate(task_interrupt_monitor, "intmonitor", 256, 0, tskIDLE_PRIORITY+1, 0); // Interrupt monitoring task
+	xTaskCreate(task_encoder_diagnostic, "encdiag", 256, 0, tskIDLE_PRIORITY+1, 0); // Encoder diagnostic task
 } // End create_application_tasks
