@@ -206,6 +206,9 @@ void task_interrupt_monitor(void *arg)
 		bool encoder_connected = encoder_get_connection_status();
 		bool interrupts_enabled = encoder_get_interrupt_status();
 		
+		// Check and recover from interrupt loops
+		encoder_check_and_recover_interrupts();
+		
 		// Store debug information
 		volatile uint32_t debug_total_interrupts = total_interrupts;
 		volatile uint32_t debug_skipped_interrupts = skipped_interrupts;
