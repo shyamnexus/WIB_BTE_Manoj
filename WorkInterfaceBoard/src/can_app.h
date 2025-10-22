@@ -20,16 +20,19 @@ extern "C" {
 
 bool can_app_init(void); // Initialize CAN controller and RX mailbox
 bool can_app_tx(uint32_t id, const uint8_t *data, uint8_t len); // Transmit a CAN frame
-void can_rx_task(void *arg); // FreeRTOS task for CAN RX and command handling
 bool can_app_get_status(void); // Get CAN controller status
 bool can_app_test_loopback(void); // Test CAN communication with loopback mode
-void can_status_task(void *arg); // FreeRTOS task for periodic CAN status monitoring
-void can_diagnostic_info(void); // Comprehensive CAN diagnostic information
 bool can_app_simple_test(void); // Simple CAN controller state test for debugging
 bool can_verify_bitrate(uint32_t expected_kbps); // Verify CAN bit rate configuration
+bool can_app_reset(void); // Reset CAN controller and mailboxes
 void CAN0_Handler(void); // CAN0 interrupt handler to prevent system deadlock
 void can_disable_interrupts(void); // Disable CAN interrupts
 void can_enable_interrupts(void); // Enable CAN interrupts
+void can_clear_piob_interrupts(void); // Clear PIOB interrupts and prevent system deadlock
+void can_init_piob_safety(void); // Initialize PIOB interrupt handling for safety
+void can_rx_task(void *arg); // FreeRTOS task for CAN RX and command handling
+void can_status_task(void *arg); // FreeRTOS task for periodic CAN status monitoring
+void can_diagnostic_info(void); // Comprehensive CAN diagnostic information
 
 #ifdef __cplusplus
 }
