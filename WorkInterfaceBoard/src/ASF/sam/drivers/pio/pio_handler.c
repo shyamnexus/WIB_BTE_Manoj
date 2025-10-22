@@ -216,6 +216,22 @@ void PIOA_Handler(void)
  */
 void PIOB_Handler(void)
 {
+    // Clear PIOB interrupt status immediately to prevent continuous triggering
+    uint32_t piob_status = pio_get_interrupt_status(PIOB);
+    if (piob_status != 0) {
+        // Clear PIOB interrupt status to prevent continuous triggering
+        pio_get_interrupt_status(PIOB);
+        
+        // Additional safety: If no interrupt sources are registered for PIOB,
+        // disable PIOB interrupts to prevent continuous triggering
+        if (gs_ul_nb_sources == 0) {
+            // No interrupt sources registered - disable PIOB interrupts
+            pio_disable_interrupt(PIOB, 0xFFFFFFFF);
+            return;
+        }
+    }
+    
+    // Process any registered interrupt handlers
     pio_handler_process(PIOB, ID_PIOB);
     
     // Check if any PIOB interrupt handlers are registered

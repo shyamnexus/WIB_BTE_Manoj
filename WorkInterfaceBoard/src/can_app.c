@@ -34,11 +34,7 @@ void CAN0_Handler(void)
     
     // Additional safety: Clear any PIOB interrupts that might be related to CAN
     // This prevents the system from getting stuck in PIOB_Handler
-    uint32_t piob_status = pio_get_interrupt_status(PIOB);
-    if (piob_status != 0) {
-        // Clear PIOB interrupt status to prevent continuous triggering
-        pio_get_interrupt_status(PIOB);
-    }
+    can_clear_piob_interrupts();
 }
 
 // Function to disable CAN interrupts when needed
@@ -51,6 +47,34 @@ void can_disable_interrupts(void)
 void can_enable_interrupts(void)
 {
     NVIC_EnableIRQ(CAN0_IRQn);
+}
+
+// Function to clear PIOB interrupts and prevent system deadlock
+void can_clear_piob_interrupts(void)
+{
+    // Clear any pending PIOB interrupts
+    uint32_t piob_status = pio_get_interrupt_status(PIOB);
+    if (piob_status != 0) {
+        // Clear PIOB interrupt status to prevent continuous triggering
+        pio_get_interrupt_status(PIOB);
+        // Disable all PIOB interrupts temporarily to prevent immediate re-triggering
+        pio_disable_interrupt(PIOB, 0xFFFFFFFF);
+        // Clear any pending PIOB interrupts in NVIC
+        NVIC_ClearPendingIRQ(PIOB_IRQn);
+    }
+}
+
+// Function to safely initialize PIOB interrupt handling
+void can_init_piob_safety(void)
+{
+    // Disable PIOB interrupts initially to prevent spurious triggers
+    pio_disable_interrupt(PIOB, 0xFFFFFFFF);
+    // Clear any pending PIOB interrupts
+    pio_get_interrupt_status(PIOB);
+    // Clear any pending PIOB interrupts in NVIC
+    NVIC_ClearPendingIRQ(PIOB_IRQn);
+    // Set PIOB interrupt priority to a safe level
+    NVIC_SetPriority(PIOB_IRQn, 8); // Lower priority than CAN and encoder
 }
 // Define TickType_t if not already defined
 #ifndef TickType_t
@@ -207,6 +231,9 @@ bool can_app_init(void)
 		volatile uint32_t debug_bitrate_verification_failed = 1;
 		// Continue anyway, but flag the issue
 	}
+	
+	// Initialize PIOB safety measures to prevent system deadlock
+	can_init_piob_safety();
 	
 	// Enable CAN0 interrupt in NVIC to prevent system deadlock
 	// Set priority lower than encoder interrupts to avoid conflicts
@@ -579,6 +606,9 @@ void can_status_task(void *arg)
 		if (status_report_interval % 5 == 0) {
 			can_diagnostic_info();
 		}
+		
+		// Clear PIOB interrupts periodically to prevent accumulation
+		can_clear_piob_interrupts();
 		
 		// Report status every 10 seconds (10000ms / 1000ms = 10 iterations)
 		status_report_interval++;
