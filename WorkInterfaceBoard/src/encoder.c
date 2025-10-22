@@ -24,6 +24,7 @@ static volatile int32_t enc2_last_position = 0;
 static volatile uint32_t enc1_last_timestamp = 0;
 static volatile uint32_t enc2_last_timestamp = 0;
 static volatile bool encoder_initialized = false;
+static volatile uint32_t debug_position_changes = 0;
 
 // Encoder state tracking
 static volatile uint8_t enc1_state = 0;
@@ -39,9 +40,10 @@ static volatile uint32_t interrupt_count = 0;
 static volatile uint32_t skipped_interrupts = 0;
 static volatile uint32_t consecutive_interrupts = 0;
 static volatile uint32_t last_interrupt_mask = 0;
-#define MIN_INTERRUPT_INTERVAL_MS 5  // Minimum 5ms between interrupts (200Hz max)
-#define MAX_INTERRUPTS_PER_SECOND 100  // Maximum 100 interrupts per second
-#define MAX_CONSECUTIVE_INTERRUPTS 10  // Maximum consecutive interrupts before disabling
+static volatile uint32_t debug_interrupts_processed = 0;
+#define MIN_INTERRUPT_INTERVAL_MS 1  // Minimum 1ms between interrupts (1000Hz max)
+#define MAX_INTERRUPTS_PER_SECOND 500  // Maximum 500 interrupts per second
+#define MAX_CONSECUTIVE_INTERRUPTS 20  // Maximum consecutive interrupts before disabling
 
 // Encoder interrupt handler
 void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
@@ -65,12 +67,8 @@ void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
     volatile uint32_t status = pio_get_interrupt_status(PIOA);
     (void)status; // Suppress unused variable warning
     
-    // Additional check: if no encoder is connected, disable interrupts to prevent spurious triggers
-    if (!encoder_is_connected()) {
-        // Disable interrupts to prevent spurious triggers
-        encoder_disable_interrupts();
-        return;
-    }
+    // Don't disable interrupts based on connection detection during interrupt handling
+    // This can cause encoder updates to be missed during normal operation
     
     // Rate limiting - prevent excessive interrupt frequency
     uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
@@ -111,6 +109,9 @@ void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
     bool enc1_changed = false;
     bool enc2_changed = false;
     
+    // Debug: Increment interrupt counter
+    debug_interrupts_processed++;
+    
     // Handle ENC1 interrupts - only process if either A or B changed
     if (ul_mask & (PIO_PA5 | PIO_PA1)) { // ENC1_A or ENC1_B
         uint8_t a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
@@ -131,6 +132,9 @@ void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
             
             enc1_state = new_state;
             enc1_changed = true;
+            
+            // Debug: Track when encoder 1 state changes
+            volatile uint32_t debug_enc1_state_changes = 1;
         }
     }
     
@@ -154,6 +158,9 @@ void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
             
             enc2_state = new_state;
             enc2_changed = true;
+            
+            // Debug: Track when encoder 2 state changes
+            volatile uint32_t debug_enc2_state_changes = 1;
         }
     }
     
@@ -249,10 +256,14 @@ static void encoder_apply_pending_changes(void)
     if (enc1_pending_changes != 0) {
         enc1_position += enc1_pending_changes;
         enc1_pending_changes = 0;
+        // Debug: Track when encoder 1 position is updated
+        volatile uint32_t debug_enc1_position_updated = 1;
     }
     if (enc2_pending_changes != 0) {
         enc2_position += enc2_pending_changes;
         enc2_pending_changes = 0;
+        // Debug: Track when encoder 2 position is updated
+        volatile uint32_t debug_enc2_position_updated = 1;
     }
 }
 
@@ -266,11 +277,41 @@ bool encoder_read_data(encoder_data_t* enc1_data, encoder_data_t* enc2_data)
     // Apply any pending changes from interrupts
     encoder_apply_pending_changes();
     
+    // Debug: Track position changes
+    static int32_t last_debug_enc1_pos = 0;
+    static int32_t last_debug_enc2_pos = 0;
+    
+    // Debug: Track if position is changing
+    static int32_t last_enc1_pos = 0;
+    static int32_t last_enc2_pos = 0;
+    
     uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
     
     // Read current positions from interrupt-updated variables
     int32_t enc1_current = enc1_position;
     int32_t enc2_current = enc2_position;
+    
+    // Debug: Check if position changed
+    if (enc1_current != last_enc1_pos) {
+        volatile int32_t debug_enc1_position_changed = enc1_current - last_enc1_pos;
+        last_enc1_pos = enc1_current;
+        debug_position_changes++;
+    }
+    if (enc2_current != last_enc2_pos) {
+        volatile int32_t debug_enc2_position_changed = enc2_current - last_enc2_pos;
+        last_enc2_pos = enc2_current;
+        debug_position_changes++;
+    }
+    
+    // Debug: Track absolute positions
+    if (enc1_current != last_debug_enc1_pos) {
+        last_debug_enc1_pos = enc1_current;
+        debug_position_changes++;
+    }
+    if (enc2_current != last_debug_enc2_pos) {
+        last_debug_enc2_pos = enc2_current;
+        debug_position_changes++;
+    }
     
     // Calculate deltas
     int32_t enc1_delta = enc1_current - enc1_last_position;
@@ -374,6 +415,9 @@ void encoder_enable_interrupts(void)
         
         pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
         NVIC_EnableIRQ(PIOA_IRQn);
+        
+        // Debug: Track when interrupts are enabled
+        volatile uint32_t debug_interrupts_enabled_count = 1;
     }
 }
 
@@ -383,6 +427,9 @@ void encoder_disable_interrupts(void)
     if (encoder_initialized) {
         pio_disable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
         NVIC_DisableIRQ(PIOA_IRQn);
+        
+        // Debug: Track when interrupts are disabled
+        volatile uint32_t debug_interrupts_disabled_count = 1;
     }
 }
 
@@ -470,9 +517,11 @@ bool encoder_is_connected(void)
     bool enc1_stable = (enc1_a_1 == enc1_a_2) && (enc1_b_1 == enc1_b_2);
     bool enc2_stable = (enc2_a_1 == enc2_a_2) && (enc2_b_1 == enc2_b_2);
     
-    // If pins are stable and not in the "no encoder" state, encoder is connected
-    bool enc1_connected = enc1_stable && !((enc1_a_1 == 1 && enc1_b_1 == 1) || (enc1_a_1 == 0 && enc1_b_1 == 0));
-    bool enc2_connected = enc2_stable && !((enc2_a_1 == 1 && enc2_b_1 == 1) || (enc2_a_1 == 0 && enc2_b_1 == 0));
+    // If pins are stable, consider encoder connected
+    // Don't disable interrupts based on pin states alone as this can cause false negatives
+    // during normal encoder operation when pins might be in the same state briefly
+    bool enc1_connected = enc1_stable;
+    bool enc2_connected = enc2_stable;
     
     return enc1_connected || enc2_connected;
 }
@@ -482,8 +531,8 @@ void encoder_monitor_connection(void)
 {
     static uint32_t last_check_time = 0;
     static uint32_t no_encoder_count = 0;
-    const uint32_t CHECK_INTERVAL_MS = 1000; // Check every second
-    const uint32_t MAX_NO_ENCODER_COUNT = 5; // Disable after 5 seconds of no encoder
+    const uint32_t CHECK_INTERVAL_MS = 5000; // Check every 5 seconds
+    const uint32_t MAX_NO_ENCODER_COUNT = 3; // Disable after 15 seconds of no encoder (3 * 5s)
     
     if (!encoder_initialized) {
         return;
@@ -496,6 +545,8 @@ void encoder_monitor_connection(void)
         
         if (!encoder_is_connected()) {
             no_encoder_count++;
+            // Only disable interrupts if we're really sure no encoder is connected
+            // and we've been checking for a long time
             if (no_encoder_count >= MAX_NO_ENCODER_COUNT) {
                 // No encoder detected for too long - disable interrupts to prevent spurious triggers
                 encoder_disable_interrupts();
@@ -503,7 +554,7 @@ void encoder_monitor_connection(void)
                 encoder_reset_interrupt_stats();
             }
         } else {
-            // Encoder detected - reset counter and enable interrupts
+            // Encoder detected - reset counter and ensure interrupts are enabled
             no_encoder_count = 0;
             if (!encoder_interrupts_enabled()) {
                 encoder_enable_interrupts();
@@ -590,4 +641,16 @@ void encoder_get_debug_info(uint32_t* consecutive_count, uint32_t* last_mask, ui
     if (interrupt_status) {
         *interrupt_status = pio_get_interrupt_status(PIOA);
     }
+}
+
+// Debug function to get interrupt processing count
+uint32_t encoder_get_debug_interrupt_count(void)
+{
+    return debug_interrupts_processed;
+}
+
+// Debug function to get position change count
+uint32_t encoder_get_debug_position_changes(void)
+{
+    return debug_position_changes;
 }

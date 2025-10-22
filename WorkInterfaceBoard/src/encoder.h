@@ -42,6 +42,8 @@ bool encoder_get_interrupt_status(void);
 void encoder_test_connection_detection(void);
 void encoder_check_and_recover_interrupts(void);
 void encoder_get_debug_info(uint32_t* consecutive_count, uint32_t* last_mask, uint32_t* interrupt_status);
+uint32_t encoder_get_debug_interrupt_count(void);
+uint32_t encoder_get_debug_position_changes(void);
 
 #ifdef __cplusplus
 }

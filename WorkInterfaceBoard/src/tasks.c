@@ -122,6 +122,8 @@ void task_encoder(void *arg)
 	if (init_retry_count >= max_init_retries) {
 		volatile uint32_t debug_encoder_init_failed = 1;
 		// Continue anyway - task will keep trying to read data
+	} else {
+		volatile uint32_t debug_encoder_init_success = 1;
 	}
 	
 	// Wait for system to stabilize before enabling interrupts
@@ -129,19 +131,15 @@ void task_encoder(void *arg)
 	
 	// Enable encoder interrupts now that tasks are running
 	encoder_enable_interrupts();
+	volatile uint32_t debug_encoder_interrupts_enabled = 1;
 	
 	// Reset encoder counters to start from zero
 	encoder_reset_counters();
 	
 	// Main task loop
 	while (1) {
-		// Monitor encoder connection and disable interrupts if no encoder detected
-		encoder_monitor_connection();
-		
-		// Temporarily disable interrupts during data reading to ensure consistency
-		encoder_disable_interrupts_temporarily();
-		
-		// Read encoder data
+		// Read encoder data without disabling interrupts to allow continuous updates
+		// The encoder_read_data function already handles atomic access to position counters
 		if (encoder_read_data(&enc1_data, &enc2_data)) {
 			// Prepare encoder 1 data payload (8 bytes: position + velocity)
 			enc1_payload[0] = (uint8_t)(enc1_data.position & 0xFF);         // Position LSB
@@ -174,16 +172,15 @@ void task_encoder(void *arg)
 			volatile int32_t debug_enc1_vel = enc1_data.velocity;
 			volatile int32_t debug_enc2_pos = enc2_data.position;
 			volatile int32_t debug_enc2_vel = enc2_data.velocity;
+			volatile uint32_t debug_encoder_data_valid = 1;
 		} else {
 			// Data read failed - set debug flag
 			volatile uint32_t debug_encoder_read_failed = 1;
+			volatile uint32_t debug_encoder_data_valid = 0;
 		}
 		
-		// Re-enable interrupts after data reading
-		encoder_enable_interrupts_after_critical();
-		
-		// Task delay for 50Hz sampling rate (20ms)
-		vTaskDelay(pdMS_TO_TICKS(20));
+		// Task delay for 100Hz sampling rate (10ms) for better encoder responsiveness
+		vTaskDelay(pdMS_TO_TICKS(10));
 	}
 }
 void task_interrupt_monitor(void *arg)
@@ -205,9 +202,14 @@ void task_interrupt_monitor(void *arg)
 		// Get encoder connection and interrupt status
 		bool encoder_connected = encoder_get_connection_status();
 		bool interrupts_enabled = encoder_get_interrupt_status();
+		uint32_t debug_interrupts_processed = encoder_get_debug_interrupt_count();
+		uint32_t debug_position_changes = encoder_get_debug_position_changes();
 		
 		// Check and recover from interrupt loops
 		encoder_check_and_recover_interrupts();
+		
+		// Monitor encoder connection and disable interrupts if no encoder detected
+		encoder_monitor_connection();
 		
 		// Store debug information
 		volatile uint32_t debug_total_interrupts = total_interrupts;
@@ -216,6 +218,8 @@ void task_interrupt_monitor(void *arg)
 		volatile uint32_t debug_skipped_per_second = skipped_per_second;
 		volatile uint32_t debug_encoder_connected = encoder_connected ? 1 : 0;
 		volatile uint32_t debug_interrupts_enabled = interrupts_enabled ? 1 : 0;
+		volatile uint32_t debug_interrupts_processed_total = debug_interrupts_processed;
+		volatile uint32_t debug_position_changes_total = debug_position_changes;
 		
 		// If interrupt rate is too high, reset statistics to prevent overflow
 		if (total_interrupts > 10000) {
