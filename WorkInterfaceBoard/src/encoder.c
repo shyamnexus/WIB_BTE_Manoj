@@ -37,8 +37,11 @@ static volatile int32_t enc2_pending_changes = 0;
 static volatile uint32_t last_interrupt_time = 0;
 static volatile uint32_t interrupt_count = 0;
 static volatile uint32_t skipped_interrupts = 0;
+static volatile uint32_t consecutive_interrupts = 0;
+static volatile uint32_t last_interrupt_mask = 0;
 #define MIN_INTERRUPT_INTERVAL_MS 5  // Minimum 5ms between interrupts (200Hz max)
 #define MAX_INTERRUPTS_PER_SECOND 100  // Maximum 100 interrupts per second
+#define MAX_CONSECUTIVE_INTERRUPTS 10  // Maximum consecutive interrupts before disabling
 
 // Encoder interrupt handler
 void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
@@ -54,6 +57,11 @@ void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
         return;
     }
     
+    // Clear the interrupt status to prevent continuous triggering
+    // Reading PIO_ISR automatically clears the interrupt status
+    volatile uint32_t status = pio_get_interrupt_status(PIOA);
+    (void)status; // Suppress unused variable warning
+    
     // Additional check: if no encoder is connected, disable interrupts to prevent spurious triggers
     if (!encoder_is_connected()) {
         // Disable interrupts to prevent spurious triggers
@@ -66,6 +74,19 @@ void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
     if (current_time - last_interrupt_time < MIN_INTERRUPT_INTERVAL_MS) {
         skipped_interrupts++;
         return; // Skip this interrupt if too frequent
+    }
+    
+    // Check for interrupt loop - if same mask keeps triggering, disable interrupts
+    if (ul_mask == last_interrupt_mask) {
+        consecutive_interrupts++;
+        if (consecutive_interrupts > MAX_CONSECUTIVE_INTERRUPTS) {
+            // Too many consecutive interrupts with same mask - disable to prevent loop
+            encoder_disable_interrupts();
+            return;
+        }
+    } else {
+        consecutive_interrupts = 0;
+        last_interrupt_mask = ul_mask;
     }
     
     // Additional rate limiting: check if we're exceeding maximum interrupts per second
@@ -137,6 +158,11 @@ void encoder_interrupt_handler(uint32_t ul_id, uint32_t ul_mask)
     if (!enc1_changed && !enc2_changed) {
         // No action needed - ASF handler system will clear the interrupt
     }
+    
+    // Ensure interrupt status is cleared to prevent continuous triggering
+    // This is a safety measure in case the ASF handler system doesn't clear it properly
+    volatile uint32_t final_status = pio_get_interrupt_status(PIOA);
+    (void)final_status; // Suppress unused variable warning
 }
 
 // Initialize encoder hardware
@@ -196,11 +222,14 @@ bool encoder_init(void)
     pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, PIO_IT_EDGE, encoder_interrupt_handler);
     
     // Set interrupt priority to allow FreeRTOS tasks to run
-    // Set lower priority than system critical interrupts but higher than CAN
-    NVIC_SetPriority(PIOA_IRQn, 5); // Balanced priority - not too high to block system
+    // Set lower priority than CAN to prevent conflicts
+    NVIC_SetPriority(PIOA_IRQn, 9); // Lower priority than CAN (7) and PIOB (8)
     
     // Don't enable interrupts yet - wait for FreeRTOS tasks to start
     // Interrupts will be enabled later via encoder_enable_interrupts()
+    
+    // Small delay to ensure PIO configuration is stable
+    for (volatile int i = 0; i < 1000; i++);
     
     encoder_initialized = true;
     
@@ -326,6 +355,17 @@ void encoder_enable_interrupts(void)
             can_disable_interrupts();
         }
         
+        // Reset interrupt loop detection before enabling
+        consecutive_interrupts = 0;
+        last_interrupt_mask = 0;
+        
+        // Clear any pending interrupts before enabling
+        volatile uint32_t clear_status = pio_get_interrupt_status(PIOA);
+        (void)clear_status; // Suppress unused variable warning
+        
+        // Small delay to ensure interrupt status is cleared
+        for (volatile int i = 0; i < 100; i++);
+        
         pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
         NVIC_EnableIRQ(PIOA_IRQn);
     }
@@ -378,6 +418,8 @@ void encoder_reset_interrupt_stats(void)
     interrupt_count = 0;
     skipped_interrupts = 0;
     last_interrupt_time = 0;
+    consecutive_interrupts = 0;
+    last_interrupt_mask = 0;
 }
 
 // Temporarily disable interrupts for critical operations
@@ -477,6 +519,10 @@ void encoder_force_disable_interrupts(void)
 void encoder_force_enable_interrupts(void)
 {
     if (encoder_initialized) {
+        // Reset interrupt loop detection before re-enabling
+        consecutive_interrupts = 0;
+        last_interrupt_mask = 0;
+        
         pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16);
         NVIC_EnableIRQ(PIOA_IRQn);
     }
@@ -507,5 +553,35 @@ void encoder_test_connection_detection(void)
         
         // Small delay between tests
         for (volatile int j = 0; j < 1000; j++);
+    }
+}
+
+// Check if interrupts are stuck in a loop and recover if needed
+void encoder_check_and_recover_interrupts(void)
+{
+    if (!encoder_initialized) {
+        return;
+    }
+    
+    // If interrupts are disabled due to loop detection, try to re-enable them
+    if (!encoder_interrupts_enabled() && encoder_is_connected()) {
+        // Reset loop detection and try to re-enable
+        consecutive_interrupts = 0;
+        last_interrupt_mask = 0;
+        encoder_enable_interrupts();
+    }
+}
+
+// Debug function to get interrupt status information
+void encoder_get_debug_info(uint32_t* consecutive_count, uint32_t* last_mask, uint32_t* interrupt_status)
+{
+    if (consecutive_count) {
+        *consecutive_count = consecutive_interrupts;
+    }
+    if (last_mask) {
+        *last_mask = last_interrupt_mask;
+    }
+    if (interrupt_status) {
+        *interrupt_status = pio_get_interrupt_status(PIOA);
     }
 }

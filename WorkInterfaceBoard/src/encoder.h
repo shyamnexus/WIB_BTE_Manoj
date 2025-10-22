@@ -40,6 +40,8 @@ void encoder_force_enable_interrupts(void);
 bool encoder_get_connection_status(void);
 bool encoder_get_interrupt_status(void);
 void encoder_test_connection_detection(void);
+void encoder_check_and_recover_interrupts(void);
+void encoder_get_debug_info(uint32_t* consecutive_count, uint32_t* last_mask, uint32_t* interrupt_status);
 
 #ifdef __cplusplus
 }
