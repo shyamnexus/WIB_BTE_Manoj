@@ -12,12 +12,17 @@ extern "C" {
 #define ENCODER_PULSES_PER_REV     1000  // Adjust based on your encoder specification
 
 // Encoder pin definitions based on pinconfig_workhead_interface_pinconfig.csv
+// Note: PA15 is used for SPI DRDY, so ENC2_A is not available
 #define ENC1_A_PIN                 PIO_PA5
 #define ENC1_B_PIN                 PIO_PA1
 #define ENC1_ENABLE_PIN            PIO_PD17
-#define ENC2_A_PIN                 PIO_PA15
+#define ENC2_A_PIN                 PIO_PA15  // Not available - used for SPI DRDY
 #define ENC2_B_PIN                 PIO_PA16
 #define ENC2_ENABLE_PIN            PIO_PD27
+
+// Encoder availability flags
+#define ENCODER1_AVAILABLE         1
+#define ENCODER2_AVAILABLE         0  // Disabled due to PA15 conflict
 
 // Encoder data structure
 typedef struct {

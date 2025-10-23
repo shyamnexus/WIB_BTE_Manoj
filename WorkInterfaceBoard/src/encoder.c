@@ -26,9 +26,12 @@ bool encoder_init(void)
     
     // Configure enable pins as outputs and set them high (enable encoders)
     pio_configure(PIOD, PIO_OUTPUT_0, ENC1_ENABLE_PIN, PIO_DEFAULT);
-    pio_configure(PIOD, PIO_OUTPUT_0, ENC2_ENABLE_PIN, PIO_DEFAULT);
     pio_set(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1
-    pio_set(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2
+    
+    if (ENCODER2_AVAILABLE) {
+        pio_configure(PIOD, PIO_OUTPUT_0, ENC2_ENABLE_PIN, PIO_DEFAULT);
+        pio_set(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2
+    }
     
     // Initialize encoder data structures
     encoder1_data.position = 0;
@@ -47,7 +50,7 @@ bool encoder_init(void)
     encoder2_data.direction = 0;
     encoder2_data.state_a = 0;
     encoder2_data.state_b = 0;
-    encoder2_data.prev_state_b = 0;
+    encoder2_data.prev_state_a = 0;
     encoder2_data.prev_state_b = 0;
     encoder2_data.last_update_time = 0;
     encoder2_data.pulse_count = 0;
@@ -58,6 +61,11 @@ bool encoder_init(void)
 
 void encoder_poll(encoder_data_t* enc_data)
 {
+    // Skip polling if this is encoder2 and it's not available
+    if (enc_data == &encoder2_data && !ENCODER2_AVAILABLE) {
+        return;
+    }
+    
     // Read current encoder states
     uint8_t current_a = (pio_get(PIOA, PIO_TYPE_PIO_INPUT, enc_data == &encoder1_data ? ENC1_A_PIN : ENC2_A_PIN)) ? 1 : 0;
     uint8_t current_b = (pio_get(PIOA, PIO_TYPE_PIO_INPUT, enc_data == &encoder1_data ? ENC1_B_PIN : ENC2_B_PIN)) ? 1 : 0;
