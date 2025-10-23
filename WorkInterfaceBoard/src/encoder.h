@@ -45,6 +45,15 @@ void encoder_get_debug_info(uint32_t* consecutive_count, uint32_t* last_mask, ui
 uint32_t encoder_get_debug_interrupt_count(void);
 uint32_t encoder_get_debug_position_changes(void);
 
+// Diagnostic functions
+void encoder_get_raw_pin_states(uint8_t* enc1_a, uint8_t* enc1_b, uint8_t* enc2_a, uint8_t* enc2_b);
+void encoder_get_current_states(uint8_t* enc1_state, uint8_t* enc2_state);
+void encoder_force_enable_for_testing(void);
+void encoder_simple_test_handler(uint32_t ul_id, uint32_t ul_mask);
+uint32_t encoder_get_simple_test_count(void);
+uint32_t encoder_get_interrupt_call_count(void);
+void encoder_test_enable_pins(void);
+
 #ifdef __cplusplus
 }
 #endif
