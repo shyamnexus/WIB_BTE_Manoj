@@ -5,6 +5,7 @@
  *  Author: MKumar
  */ 
 #include "TIB_Init.h"
+#include "encoder.h"
 int tool_type = 9;
 unsigned char who_lis2 = 0;
 int TIB_Init()
@@ -22,7 +23,12 @@ int TIB_Init()
 	
 	// Initialize I2C0 at 100kHz
 
-	
+	// Initialize encoders
+	if (!encoder_init()) {
+		// Encoder initialization failed
+		volatile uint32_t debug_encoder_init_failed = 1;
+		return -1;  // Return error
+	}
 
 	return 0;  // Success
 }
