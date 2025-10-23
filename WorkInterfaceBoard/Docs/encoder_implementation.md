@@ -27,7 +27,7 @@ Based on `pinconfig_workhead_interface_pinconfig.csv`:
 ### Key Features
 1. **Polling-based**: No interrupts used, polls encoder pins every 10ms
 2. **Quadrature decoding**: Properly decodes A/B channel signals for direction detection
-3. **Velocity calculation**: Calculates velocity over 100ms windows
+3. **Velocity calculation**: Calculates velocity over 100ms windows in degrees per second
 4. **CAN transmission**: Sends direction and velocity data over CAN bus
 
 ### CAN Message Format
@@ -36,13 +36,14 @@ Based on `pinconfig_workhead_interface_pinconfig.csv`:
 
 #### Message Data (6 bytes):
 - Byte 0: Direction (0=stopped, 1=forward, 2=reverse)
-- Bytes 1-4: Velocity (32-bit signed integer, pulses per second)
+- Bytes 1-4: Velocity (32-bit signed integer, degrees per second)
 - Byte 5: Position (8-bit position data)
 
 ### Configuration
 - Polling rate: 10ms
 - Velocity calculation window: 100ms
-- Encoder pulses per revolution: 1000 (configurable)
+- Encoder pulses per revolution: 1952 (122 poles × 64 interpolation ÷ 4)
+- Velocity output: degrees per second
 
 ### FreeRTOS Task
 The encoder functionality runs in a dedicated FreeRTOS task (`encoder_task`) that:

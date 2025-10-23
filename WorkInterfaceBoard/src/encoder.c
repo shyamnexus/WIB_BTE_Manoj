@@ -185,14 +185,19 @@ int32_t calculate_velocity(encoder_data_t* enc_data, uint32_t current_time)
     if (time_diff == 0) return 0;
     
     // Calculate velocity in pulses per second
-    int32_t velocity = (enc_data->pulse_count * 1000) / time_diff;
+    int32_t velocity_pulses_per_sec = (enc_data->pulse_count * 1000) / time_diff;
+    
+    // Convert from pulses per second to degrees per second
+    // Formula: (pulses/sec) * (360 degrees/rev) / (pulses/rev) = degrees/sec
+    // Using integer arithmetic: (velocity_pulses_per_sec * 360) / ENCODER_PULSES_PER_REV
+    int32_t velocity_degrees_per_sec = (velocity_pulses_per_sec * 360) / ENCODER_PULSES_PER_REV;
     
     // Apply direction sign
     if (enc_data->direction == 2) { // Reverse
-        velocity = -velocity;
+        velocity_degrees_per_sec = -velocity_degrees_per_sec;
     }
     
-    return velocity;
+    return velocity_degrees_per_sec;
 }
 
 void apply_velocity_smoothing(encoder_data_t* enc_data)
