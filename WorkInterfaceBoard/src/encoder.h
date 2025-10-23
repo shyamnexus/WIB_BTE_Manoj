@@ -45,6 +45,11 @@ void encoder_get_debug_info(uint32_t* consecutive_count, uint32_t* last_mask, ui
 uint32_t encoder_get_debug_interrupt_count(void);
 uint32_t encoder_get_debug_position_changes(void);
 
+// Hardware enable/disable functions
+void encoder_disable_hardware(void);
+void encoder_enable_hardware(void);
+bool encoder_hardware_enabled(void);
+
 // Diagnostic functions
 void encoder_get_raw_pin_states(uint8_t* enc1_a, uint8_t* enc1_b, uint8_t* enc2_a, uint8_t* enc2_b);
 void encoder_get_current_states(uint8_t* enc1_state, uint8_t* enc2_state);

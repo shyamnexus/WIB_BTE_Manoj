@@ -196,13 +196,13 @@ bool encoder_init(void)
     pio_set_debounce_filter(PIOA, PIO_PA5 | PIO_PA1 | PIO_PA15 | PIO_PA16, 1000);
     
     // Configure encoder enable pins
-    // ENC1_ENABLE: PD17
+    // ENC1_ENABLE: PD17 (low = enabled)
     pio_configure(PIOD, PIO_OUTPUT_0, PIO_PD17, 0);
-    pio_set(PIOD, PIO_PD17); // Enable encoder 1
+    pio_clear(PIOD, PIO_PD17); // Enable encoder 1 (low = enabled)
     
-    // ENC2_ENABLE: PD27
+    // ENC2_ENABLE: PD27 (low = enabled)
     pio_configure(PIOD, PIO_OUTPUT_0, PIO_PD27, 0);
-    pio_set(PIOD, PIO_PD27); // Enable encoder 2
+    pio_clear(PIOD, PIO_PD27); // Enable encoder 2 (low = enabled)
     
     // Initialize position tracking variables first
     enc1_position = 0;
@@ -721,19 +721,52 @@ uint32_t encoder_get_interrupt_call_count(void)
     return debug_interrupt_called_count;
 }
 
+// Disable encoder hardware (set enable pins high)
+void encoder_disable_hardware(void)
+{
+    if (!encoder_initialized) return;
+    
+    // Set enable pins high to disable encoders (high = disabled)
+    pio_set(PIOD, PIO_PD17);   // Disable encoder 1
+    pio_set(PIOD, PIO_PD27);   // Disable encoder 2
+}
+
+// Enable encoder hardware (set enable pins low)
+void encoder_enable_hardware(void)
+{
+    if (!encoder_initialized) return;
+    
+    // Set enable pins low to enable encoders (low = enabled)
+    pio_clear(PIOD, PIO_PD17); // Enable encoder 1
+    pio_clear(PIOD, PIO_PD27); // Enable encoder 2
+}
+
+// Check if encoder hardware is enabled
+bool encoder_hardware_enabled(void)
+{
+    if (!encoder_initialized) return false;
+    
+    // Read enable pin states - low means enabled
+    uint8_t enc1_enable = pio_get(PIOD, PIO_TYPE_PIO_OUTPUT, PIO_PD17);
+    uint8_t enc2_enable = pio_get(PIOD, PIO_TYPE_PIO_OUTPUT, PIO_PD27);
+    
+    // Both encoders are enabled if both pins are low
+    return (enc1_enable == 0) && (enc2_enable == 0);
+}
+
 // DIAGNOSTIC: Test encoder enable pins
 void encoder_test_enable_pins(void)
 {
     if (!encoder_initialized) return;
     
     // Toggle encoder enable pins to test if they're working
-    pio_clear(PIOD, PIO_PD17); // Disable encoder 1
+    pio_set(PIOD, PIO_PD17);   // Disable encoder 1 (high = disabled)
     for (volatile int i = 0; i < 1000; i++); // Small delay
-    pio_set(PIOD, PIO_PD17);   // Enable encoder 1
+    pio_clear(PIOD, PIO_PD17); // Enable encoder 1 (low = enabled)
     
-    pio_clear(PIOD, PIO_PD27); // Disable encoder 2
+    pio_set(PIOD, PIO_PD27);   // Disable encoder 2 (high = disabled)
     for (volatile int i = 0; i < 1000; i++); // Small delay
-    pio_set(PIOD, PIO_PD27);   // Enable encoder 2
+    pio_clear(PIOD, PIO_PD27); // Enable encoder 2 (low = enabled)
     
     // Debug flag
     volatile uint32_t debug_enable_pins_toggled = 1;
