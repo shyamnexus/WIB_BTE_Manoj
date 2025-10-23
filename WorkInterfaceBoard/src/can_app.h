@@ -13,6 +13,8 @@ extern "C" {
 #define CAN_ID_ACCELEROMETER   0x121u // ID for accelerometer XYZ bytes
 #define CAN_ID_TEMPERATURE     0x122u // ID for temperature readings
 #define CAN_ID_TOOLTYPE        0x123u // ID for tool type status
+#define CAN_ID_ENCODER1        0x124u // ID for encoder 1 data (position, velocity, direction)
+#define CAN_ID_ENCODER2        0x125u // ID for encoder 2 data (position, velocity, direction)
 #define CAN_ID_STATUS          0x200u // ID for system status messages
 #define CAN_ID_POT_COMMAND     0x220u // ID for potentiometer control/telemetry
 
