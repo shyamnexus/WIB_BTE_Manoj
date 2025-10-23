@@ -50,6 +50,8 @@ int main (void)
 		while(1); // Stop execution if CAN fails
 	}
 	
+	/* Note: Encoder initialization is handled in the encoder_task */
+	
 // 	/* Test CAN communication (optional - can be disabled for production) */
 // 	// Simple CAN controller state test first
 // 	if (!can_app_simple_test()) {

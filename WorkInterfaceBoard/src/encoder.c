@@ -191,7 +191,9 @@ void encoder_task(void *arg)
     for (;;) {
         // Poll both encoders
         encoder_poll(&encoder1_data);
-        encoder_poll(&encoder2_data);
+        if (ENCODER2_AVAILABLE) {
+            encoder_poll(&encoder2_data);
+        }
         
         // Send encoder 1 data over CAN
         uint8_t enc1_data[6];
@@ -204,16 +206,23 @@ void encoder_task(void *arg)
         
         can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc1_data, 6);
         
-        // Send encoder 2 data over CAN
-        uint8_t enc2_data[6];
-        enc2_data[0] = (uint8_t)(encoder2_data.direction & 0xFF);
-        enc2_data[1] = (uint8_t)(encoder2_data.velocity & 0xFF);
-        enc2_data[2] = (uint8_t)((encoder2_data.velocity >> 8) & 0xFF);
-        enc2_data[3] = (uint8_t)((encoder2_data.velocity >> 16) & 0xFF);
-        enc2_data[4] = (uint8_t)((encoder2_data.velocity >> 24) & 0xFF);
-        enc2_data[5] = (uint8_t)(encoder2_data.position & 0xFF);
+        // Debug: Store encoder data for debugging
+        volatile uint32_t debug_enc1_direction = encoder1_data.direction;
+        volatile uint32_t debug_enc1_velocity = encoder1_data.velocity;
+        volatile uint32_t debug_enc1_position = encoder1_data.position;
         
-        can_app_tx(CAN_ID_ENCODER2_DIR_VEL, enc2_data, 6);
+        // Send encoder 2 data over CAN (only if available)
+        if (ENCODER2_AVAILABLE) {
+            uint8_t enc2_data[6];
+            enc2_data[0] = (uint8_t)(encoder2_data.direction & 0xFF);
+            enc2_data[1] = (uint8_t)(encoder2_data.velocity & 0xFF);
+            enc2_data[2] = (uint8_t)((encoder2_data.velocity >> 8) & 0xFF);
+            enc2_data[3] = (uint8_t)((encoder2_data.velocity >> 16) & 0xFF);
+            enc2_data[4] = (uint8_t)((encoder2_data.velocity >> 24) & 0xFF);
+            enc2_data[5] = (uint8_t)(encoder2_data.position & 0xFF);
+            
+            can_app_tx(CAN_ID_ENCODER2_DIR_VEL, enc2_data, 6);
+        }
         
         // Wait for next polling cycle
         vTaskDelay(pdMS_TO_TICKS(ENCODER_POLLING_RATE_MS));
