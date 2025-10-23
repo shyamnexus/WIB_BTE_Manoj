@@ -36,23 +36,27 @@ bool encoder_init(void)
     // Initialize encoder data structures
     encoder1_data.position = 0;
     encoder1_data.velocity = 0;
+    encoder1_data.smoothed_velocity = 0;
     encoder1_data.direction = 0;
     encoder1_data.state_a = 0;
     encoder1_data.state_b = 0;
     encoder1_data.prev_state_a = 0;
     encoder1_data.prev_state_b = 0;
     encoder1_data.last_update_time = 0;
+    encoder1_data.last_direction_change = 0;
     encoder1_data.pulse_count = 0;
     encoder1_data.velocity_window_start = 0;
     
     encoder2_data.position = 0;
     encoder2_data.velocity = 0;
+    encoder2_data.smoothed_velocity = 0;
     encoder2_data.direction = 0;
     encoder2_data.state_a = 0;
     encoder2_data.state_b = 0;
     encoder2_data.prev_state_a = 0;
     encoder2_data.prev_state_b = 0;
     encoder2_data.last_update_time = 0;
+    encoder2_data.last_direction_change = 0;
     encoder2_data.pulse_count = 0;
     encoder2_data.velocity_window_start = 0;
     
@@ -86,54 +90,71 @@ void encoder_poll(encoder_data_t* enc_data)
         // Quadrature decoding logic
         // Forward: A leads B (A changes first)
         // Reverse: B leads A (B changes first)
+        uint8_t new_direction = 0;
+        bool position_changed = false;
+        
         if (enc_data->prev_state_a == 0 && enc_data->prev_state_b == 0) {
             if (enc_data->state_a == 1 && enc_data->state_b == 0) {
                 // Forward: A leads
                 enc_data->position++;
-                enc_data->direction = 1;
+                new_direction = 1;
                 enc_data->pulse_count++;
+                position_changed = true;
             } else if (enc_data->state_a == 0 && enc_data->state_b == 1) {
                 // Reverse: B leads
                 enc_data->position--;
-                enc_data->direction = 2;
+                new_direction = 2;
                 enc_data->pulse_count++;
+                position_changed = true;
             }
         } else if (enc_data->prev_state_a == 1 && enc_data->prev_state_b == 0) {
             if (enc_data->state_a == 1 && enc_data->state_b == 1) {
                 // Forward: A leads
                 enc_data->position++;
-                enc_data->direction = 1;
+                new_direction = 1;
                 enc_data->pulse_count++;
+                position_changed = true;
             } else if (enc_data->state_a == 0 && enc_data->state_b == 0) {
                 // Reverse: B leads
                 enc_data->position--;
-                enc_data->direction = 2;
+                new_direction = 2;
                 enc_data->pulse_count++;
+                position_changed = true;
             }
         } else if (enc_data->prev_state_a == 1 && enc_data->prev_state_b == 1) {
             if (enc_data->state_a == 0 && enc_data->state_b == 1) {
                 // Forward: A leads
                 enc_data->position++;
-                enc_data->direction = 1;
+                new_direction = 1;
                 enc_data->pulse_count++;
+                position_changed = true;
             } else if (enc_data->state_a == 1 && enc_data->state_b == 0) {
                 // Reverse: B leads
                 enc_data->position--;
-                enc_data->direction = 2;
+                new_direction = 2;
                 enc_data->pulse_count++;
+                position_changed = true;
             }
         } else if (enc_data->prev_state_a == 0 && enc_data->prev_state_b == 1) {
             if (enc_data->state_a == 0 && enc_data->state_b == 0) {
                 // Forward: A leads
                 enc_data->position++;
-                enc_data->direction = 1;
+                new_direction = 1;
                 enc_data->pulse_count++;
+                position_changed = true;
             } else if (enc_data->state_a == 1 && enc_data->state_b == 1) {
                 // Reverse: B leads
                 enc_data->position--;
-                enc_data->direction = 2;
+                new_direction = 2;
                 enc_data->pulse_count++;
+                position_changed = true;
             }
+        }
+        
+        // Update direction only if change is allowed (debouncing)
+        if (position_changed && is_direction_change_allowed(enc_data, current_time, new_direction)) {
+            enc_data->direction = new_direction;
+            enc_data->last_direction_change = current_time;
         }
         
         enc_data->last_update_time = current_time;
@@ -147,6 +168,7 @@ void encoder_poll(encoder_data_t* enc_data)
     // Calculate velocity periodically
     if (current_time - enc_data->velocity_window_start >= VELOCITY_CALC_WINDOW_MS) {
         enc_data->velocity = calculate_velocity(enc_data, current_time);
+        apply_velocity_smoothing(enc_data);
         enc_data->velocity_window_start = current_time;
         enc_data->pulse_count = 0;
     }
@@ -171,6 +193,34 @@ int32_t calculate_velocity(encoder_data_t* enc_data, uint32_t current_time)
     }
     
     return velocity;
+}
+
+void apply_velocity_smoothing(encoder_data_t* enc_data)
+{
+    // Apply exponential smoothing to reduce jerky velocity changes
+    float smoothing_factor = VELOCITY_SMOOTHING_FACTOR;
+    enc_data->smoothed_velocity = (int32_t)(smoothing_factor * enc_data->smoothed_velocity + 
+                                           (1.0f - smoothing_factor) * enc_data->velocity);
+}
+
+bool is_direction_change_allowed(encoder_data_t* enc_data, uint32_t current_time, uint8_t new_direction)
+{
+    // Don't allow direction changes if we're already in that direction
+    if (enc_data->direction == new_direction) {
+        return false;
+    }
+    
+    // Don't allow direction changes too frequently (debouncing)
+    if (current_time - enc_data->last_direction_change < DIRECTION_DEBOUNCE_MS) {
+        return false;
+    }
+    
+    // Only allow direction change if we have some velocity (not just noise)
+    if (abs(enc_data->velocity) < 2) { // Minimum velocity threshold
+        return false;
+    }
+    
+    return true;
 }
 
 void encoder_task(void *arg)
@@ -198,10 +248,10 @@ void encoder_task(void *arg)
         // Send encoder 1 data over CAN
         uint8_t enc1_data[6];
         enc1_data[0] = (uint8_t)(encoder1_data.direction & 0xFF);
-        enc1_data[1] = (uint8_t)(encoder1_data.velocity & 0xFF);
-        enc1_data[2] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
-        enc1_data[3] = (uint8_t)((encoder1_data.velocity >> 16) & 0xFF);
-        enc1_data[4] = (uint8_t)((encoder1_data.velocity >> 24) & 0xFF);
+        enc1_data[1] = (uint8_t)(encoder1_data.smoothed_velocity & 0xFF);
+        enc1_data[2] = (uint8_t)((encoder1_data.smoothed_velocity >> 8) & 0xFF);
+        enc1_data[3] = (uint8_t)((encoder1_data.smoothed_velocity >> 16) & 0xFF);
+        enc1_data[4] = (uint8_t)((encoder1_data.smoothed_velocity >> 24) & 0xFF);
         enc1_data[5] = (uint8_t)(encoder1_data.position & 0xFF);
         
         can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc1_data, 6);
@@ -209,16 +259,17 @@ void encoder_task(void *arg)
         // Debug: Store encoder data for debugging
         volatile uint32_t debug_enc1_direction = encoder1_data.direction;
         volatile uint32_t debug_enc1_velocity = encoder1_data.velocity;
+        volatile uint32_t debug_enc1_smoothed_velocity = encoder1_data.smoothed_velocity;
         volatile uint32_t debug_enc1_position = encoder1_data.position;
         
         // Send encoder 2 data over CAN (only if available)
         if (ENCODER2_AVAILABLE) {
             uint8_t enc2_data[6];
             enc2_data[0] = (uint8_t)(encoder2_data.direction & 0xFF);
-            enc2_data[1] = (uint8_t)(encoder2_data.velocity & 0xFF);
-            enc2_data[2] = (uint8_t)((encoder2_data.velocity >> 8) & 0xFF);
-            enc2_data[3] = (uint8_t)((encoder2_data.velocity >> 16) & 0xFF);
-            enc2_data[4] = (uint8_t)((encoder2_data.velocity >> 24) & 0xFF);
+            enc2_data[1] = (uint8_t)(encoder2_data.smoothed_velocity & 0xFF);
+            enc2_data[2] = (uint8_t)((encoder2_data.smoothed_velocity >> 8) & 0xFF);
+            enc2_data[3] = (uint8_t)((encoder2_data.smoothed_velocity >> 16) & 0xFF);
+            enc2_data[4] = (uint8_t)((encoder2_data.smoothed_velocity >> 24) & 0xFF);
             enc2_data[5] = (uint8_t)(encoder2_data.position & 0xFF);
             
             can_app_tx(CAN_ID_ENCODER2_DIR_VEL, enc2_data, 6);
