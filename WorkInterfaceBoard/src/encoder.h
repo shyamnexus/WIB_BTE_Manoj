@@ -39,6 +39,8 @@ typedef struct {
 // CAN message IDs for encoder data
 #define CAN_ID_ENCODER1_DIR_VEL       0x130
 #define CAN_ID_ENCODER2_DIR_VEL       0x131
+#define CAN_ID_ENCODER1_PINS          0x188
+#define CAN_ID_ENCODER2_PINS          0x189
 
 // Function prototypes
 bool encoder_init(void);
@@ -47,6 +49,10 @@ void encoder_task(void *arg);
 int32_t calculate_velocity(encoder_data_t* enc_data, uint32_t current_time);
 void apply_velocity_smoothing(encoder_data_t* enc_data);
 bool is_direction_change_allowed(encoder_data_t* enc_data, uint32_t current_time, uint8_t new_direction);
+
+// Interrupt handler prototypes
+void encoder1_interrupt_handler(uint32_t id, uint32_t mask);
+void encoder2_interrupt_handler(uint32_t id, uint32_t mask);
 
 // TC-specific functions
 bool encoder_tc_init(void);

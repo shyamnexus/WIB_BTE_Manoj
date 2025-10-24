@@ -16,6 +16,7 @@ extern "C" {
 #define CAN_ID_ENCODER1_DIR_VEL 0x130u // ID for encoder 1 direction, velocity, and position
 #define CAN_ID_ENCODER2_DIR_VEL 0x131u // ID for encoder 2 direction, velocity, and position
 #define CAN_ID_ENCODER1_PINS   0x188u // ID for encoder 1 pin states (A and B pins)
+#define CAN_ID_ENCODER2_PINS   0x189u // ID for encoder 2 pin states (A and B pins)
 #define CAN_ID_STATUS          0x200u // ID for system status messages
 #define CAN_ID_POT_COMMAND     0x220u // ID for potentiometer control/telemetry
 

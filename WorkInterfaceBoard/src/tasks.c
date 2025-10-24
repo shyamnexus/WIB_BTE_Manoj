@@ -66,12 +66,12 @@ void task_encoder1_pin_monitor(void *arg){
 }
 void create_application_tasks(void)
 {
-	// Only create CAN tasks and encoder 1 pin monitor task
+	// Create CAN tasks and interrupt-driven encoder task
 	xTaskCreate(can_rx_task, "canrx", 512, 0, tskIDLE_PRIORITY+2, 0); // CAN RX handler task
 	xTaskCreate(can_status_task, "canstatus", 256, 0, tskIDLE_PRIORITY+1, 0); // CAN status monitoring task
-	xTaskCreate(task_encoder1_pin_monitor, "enc1pins", 512, 0, tskIDLE_PRIORITY+2, 0); // Encoder 1 pin monitoring task
+	xTaskCreate(encoder_task, "encoder", 512, 0, tskIDLE_PRIORITY+2, 0); // Interrupt-driven encoder task
 	
 	// All other tasks disabled as requested
 	// xTaskCreate(task_test, "testTask", 512, 0, tskIDLE_PRIORITY+2, 0); // Load cell sampling task - DISABLED
-	// xTaskCreate(encoder_task, "encoder", 512, 0, tskIDLE_PRIORITY+2, 0); // Encoder polling and CAN transmission task - DISABLED
+	// xTaskCreate(task_encoder1_pin_monitor, "enc1pins", 512, 0, tskIDLE_PRIORITY+2, 0); // Encoder 1 pin monitoring task - DISABLED
 } // End create_application_tasks
