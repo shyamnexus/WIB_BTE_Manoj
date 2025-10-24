@@ -403,181 +403,50 @@ void encoder_task(void *arg)
             volatile uint32_t debug_enc2_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
             volatile uint32_t debug_enc2_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
             // Prepare CAN message for encoder 1
+            // Message format: [Direction(1)] [Velocity(3)] [Position(4)]
+            // Direction: 0=stopped, 1=forward, 2=reverse
+            // Velocity: signed 24-bit value (pulses per second)
+            // Position: unsigned 32-bit value (pulse count from TC counter)
             uint8_t enc1_data[8];
             
-            // Pack position (4 bytes) - add debug counter to verify transmission
-            enc1_data[0] = (uint8_t)(encoder1_data.position & 0xFF);
-            enc1_data[1] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
-            enc1_data[2] = (uint8_t)((encoder1_data.position >> 16) & 0xFF);
-            enc1_data[3] = (uint8_t)((encoder1_data.position >> 24) & 0xFF);
+            // Pack direction (1 byte) - 0=stopped, 1=forward, 2=reverse
+            enc1_data[0] = encoder1_data.direction;
             
-            // Pack velocity (4 bytes) - add debug counter to verify transmission
-            enc1_data[4] = (uint8_t)(encoder1_data.velocity & 0xFF);
-            enc1_data[5] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
-            enc1_data[6] = (uint8_t)((encoder1_data.velocity >> 16) & 0xFF);
-            enc1_data[7] = (uint8_t)((encoder1_data.velocity >> 24) & 0xFF);
+            // Pack velocity (3 bytes) - signed 24-bit value
+            enc1_data[1] = (uint8_t)(encoder1_data.velocity & 0xFF);
+            enc1_data[2] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
+            enc1_data[3] = (uint8_t)((encoder1_data.velocity >> 16) & 0xFF);
             
-            // Debug: Add task counter to verify encoder task is running
-            if (debug_task_counter % 10 == 0) {
-                enc1_data[0] = (uint8_t)(debug_task_counter & 0xFF);
-                enc1_data[1] = (uint8_t)((debug_task_counter >> 8) & 0xFF);
-            }
+            // Pack position (4 bytes) - unsigned 32-bit value
+            enc1_data[4] = (uint8_t)(encoder1_data.position & 0xFF);
+            enc1_data[5] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
+            enc1_data[6] = (uint8_t)((encoder1_data.position >> 16) & 0xFF);
+            enc1_data[7] = (uint8_t)((encoder1_data.position >> 24) & 0xFF);
             
-            // Debug: Add test pattern to verify CAN transmission
-            if (debug_task_counter % 20 == 0) {
-                enc1_data[2] = 0xAA;
-                enc1_data[3] = 0x55;
-            }
-            
-            // Debug: Add GPIO readings to verify encoder pins are working
-            if (debug_task_counter % 30 == 0) {
-                enc1_data[4] = (uint8_t)(debug_enc1_a & 0xFF);
-                enc1_data[5] = (uint8_t)(debug_enc1_b & 0xFF);
-                enc1_data[6] = (uint8_t)(debug_enc2_a & 0xFF);
-                enc1_data[7] = (uint8_t)(debug_enc2_b & 0xFF);
-            }
-            
-            // Debug: Add TC counter readings to verify TC is working
-            if (debug_task_counter % 40 == 0) {
-                volatile uint32_t debug_tc_ch0 = TC0->TC_CHANNEL[0].TC_CV;
-                volatile uint32_t debug_tc_ch1 = TC0->TC_CHANNEL[1].TC_CV;
-                enc1_data[0] = (uint8_t)(debug_tc_ch0 & 0xFF);
-                enc1_data[1] = (uint8_t)((debug_tc_ch0 >> 8) & 0xFF);
-                enc1_data[2] = (uint8_t)(debug_tc_ch1 & 0xFF);
-                enc1_data[3] = (uint8_t)((debug_tc_ch1 >> 8) & 0xFF);
-            }
-            
-            // Debug: Add test pattern to verify CAN transmission
-            if (debug_task_counter % 50 == 0) {
-                enc1_data[0] = 0xDE;
-                enc1_data[1] = 0xAD;
-                enc1_data[2] = 0xBE;
-                enc1_data[3] = 0xEF;
-                enc1_data[4] = 0xCA;
-                enc1_data[5] = 0xFE;
-                enc1_data[6] = 0xBA;
-                enc1_data[7] = 0xBE;
-            }
-            
-            // Debug: Add simple counter to verify encoder task is running
-            if (debug_task_counter % 100 == 0) {
-                enc1_data[0] = (uint8_t)(debug_task_counter & 0xFF);
-                enc1_data[1] = (uint8_t)((debug_task_counter >> 8) & 0xFF);
-                enc1_data[2] = (uint8_t)((debug_task_counter >> 16) & 0xFF);
-                enc1_data[3] = (uint8_t)((debug_task_counter >> 24) & 0xFF);
-            }
-            
-            // Debug: Add encoder position data to verify encoder is working
-            if (debug_task_counter % 200 == 0) {
-                enc1_data[4] = (uint8_t)(encoder1_data.position & 0xFF);
-                enc1_data[5] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
-                enc1_data[6] = (uint8_t)(encoder1_data.velocity & 0xFF);
-                enc1_data[7] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
-            }
-            
-            // Debug: Add GPIO-based encoder position to verify encoder pins are working
-            if (debug_task_counter % 300 == 0) {
-                volatile uint32_t debug_gpio_pos1 = encoder_gpio_read_position(0);
-                volatile uint32_t debug_gpio_pos2 = encoder_gpio_read_position(1);
-                enc1_data[0] = (uint8_t)(debug_gpio_pos1 & 0xFF);
-                enc1_data[1] = (uint8_t)((debug_gpio_pos1 >> 8) & 0xFF);
-                enc1_data[2] = (uint8_t)(debug_gpio_pos2 & 0xFF);
-                enc1_data[3] = (uint8_t)((debug_gpio_pos2 >> 8) & 0xFF);
-            }
-            
-            // Debug: Add test pattern to verify CAN transmission
-            if (debug_task_counter % 400 == 0) {
-                enc1_data[0] = 0x12;
-                enc1_data[1] = 0x34;
-                enc1_data[2] = 0x56;
-                enc1_data[3] = 0x78;
-                enc1_data[4] = 0x9A;
-                enc1_data[5] = 0xBC;
-                enc1_data[6] = 0xDE;
-                enc1_data[7] = 0xF0;
-            }
-            
-            // Debug: Add simple counter to verify encoder task is running
-            if (debug_task_counter % 500 == 0) {
-                enc1_data[0] = (uint8_t)(debug_task_counter & 0xFF);
-                enc1_data[1] = (uint8_t)((debug_task_counter >> 8) & 0xFF);
-                enc1_data[2] = (uint8_t)((debug_task_counter >> 16) & 0xFF);
-                enc1_data[3] = (uint8_t)((debug_task_counter >> 24) & 0xFF);
-            }
-            
-            // Debug: Add encoder position data to verify encoder is working
-            if (debug_task_counter % 600 == 0) {
-                enc1_data[4] = (uint8_t)(encoder1_data.position & 0xFF);
-                enc1_data[5] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
-                enc1_data[6] = (uint8_t)(encoder1_data.velocity & 0xFF);
-                enc1_data[7] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
-            }
-            
-            // Debug: Add GPIO-based encoder position to verify encoder pins are working
-            if (debug_task_counter % 700 == 0) {
-                volatile uint32_t debug_gpio_pos1 = encoder_gpio_read_position(0);
-                volatile uint32_t debug_gpio_pos2 = encoder_gpio_read_position(1);
-                enc1_data[0] = (uint8_t)(debug_gpio_pos1 & 0xFF);
-                enc1_data[1] = (uint8_t)((debug_gpio_pos1 >> 8) & 0xFF);
-                enc1_data[2] = (uint8_t)(debug_gpio_pos2 & 0xFF);
-                enc1_data[3] = (uint8_t)((debug_gpio_pos2 >> 8) & 0xFF);
-            }
-            
-            // Debug: Add test pattern to verify CAN transmission
-            if (debug_task_counter % 800 == 0) {
-                enc1_data[0] = 0xAA;
-                enc1_data[1] = 0x55;
-                enc1_data[2] = 0xAA;
-                enc1_data[3] = 0x55;
-                enc1_data[4] = 0xAA;
-                enc1_data[5] = 0x55;
-                enc1_data[6] = 0xAA;
-                enc1_data[7] = 0x55;
-            }
-            
-            // Debug: Add simple counter to verify encoder task is running
-            if (debug_task_counter % 900 == 0) {
-                enc1_data[0] = (uint8_t)(debug_task_counter & 0xFF);
-                enc1_data[1] = (uint8_t)((debug_task_counter >> 8) & 0xFF);
-                enc1_data[2] = (uint8_t)((debug_task_counter >> 16) & 0xFF);
-                enc1_data[3] = (uint8_t)((debug_task_counter >> 24) & 0xFF);
-            }
-            
-            // Debug: Add encoder position data to verify encoder is working
-            if (debug_task_counter % 1000 == 0) {
-                enc1_data[4] = (uint8_t)(encoder1_data.position & 0xFF);
-                enc1_data[5] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
-                enc1_data[6] = (uint8_t)(encoder1_data.velocity & 0xFF);
-                enc1_data[7] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
-            }
-            
-            // Debug: Add GPIO-based encoder position to verify encoder pins are working
-            if (debug_task_counter % 1100 == 0) {
-                volatile uint32_t debug_gpio_pos1 = encoder_gpio_read_position(0);
-                volatile uint32_t debug_gpio_pos2 = encoder_gpio_read_position(1);
-                enc1_data[0] = (uint8_t)(debug_gpio_pos1 & 0xFF);
-                enc1_data[1] = (uint8_t)((debug_gpio_pos1 >> 8) & 0xFF);
-                enc1_data[2] = (uint8_t)(debug_gpio_pos2 & 0xFF);
-                enc1_data[3] = (uint8_t)((debug_gpio_pos2 >> 8) & 0xFF);
-            }
             
             can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc1_data, 8);
             
             // Send encoder 2 data if available
             if (ENCODER2_AVAILABLE) {
+                // Message format: [Direction(1)] [Velocity(3)] [Position(4)]
+                // Direction: 0=stopped, 1=forward, 2=reverse
+                // Velocity: signed 24-bit value (pulses per second)
+                // Position: unsigned 32-bit value (pulse count from TC counter)
                 uint8_t enc2_data[8];
                 
-                // Pack position (4 bytes)
-                enc2_data[0] = (uint8_t)(encoder2_data.position & 0xFF);
-                enc2_data[1] = (uint8_t)((encoder2_data.position >> 8) & 0xFF);
-                enc2_data[2] = (uint8_t)((encoder2_data.position >> 16) & 0xFF);
-                enc2_data[3] = (uint8_t)((encoder2_data.position >> 24) & 0xFF);
+                // Pack direction (1 byte) - 0=stopped, 1=forward, 2=reverse
+                enc2_data[0] = encoder2_data.direction;
                 
-                // Pack velocity (4 bytes)
-                enc2_data[4] = (uint8_t)(encoder2_data.velocity & 0xFF);
-                enc2_data[5] = (uint8_t)((encoder2_data.velocity >> 8) & 0xFF);
-                enc2_data[6] = (uint8_t)((encoder2_data.velocity >> 16) & 0xFF);
-                enc2_data[7] = (uint8_t)((encoder2_data.velocity >> 24) & 0xFF);
+                // Pack velocity (3 bytes) - signed 24-bit value
+                enc2_data[1] = (uint8_t)(encoder2_data.velocity & 0xFF);
+                enc2_data[2] = (uint8_t)((encoder2_data.velocity >> 8) & 0xFF);
+                enc2_data[3] = (uint8_t)((encoder2_data.velocity >> 16) & 0xFF);
+                
+                // Pack position (4 bytes) - unsigned 32-bit value
+                enc2_data[4] = (uint8_t)(encoder2_data.position & 0xFF);
+                enc2_data[5] = (uint8_t)((encoder2_data.position >> 8) & 0xFF);
+                enc2_data[6] = (uint8_t)((encoder2_data.position >> 16) & 0xFF);
+                enc2_data[7] = (uint8_t)((encoder2_data.position >> 24) & 0xFF);
                 
                 can_app_tx(CAN_ID_ENCODER2_DIR_VEL, enc2_data, 8);
             }
