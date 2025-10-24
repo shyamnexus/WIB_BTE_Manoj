@@ -25,10 +25,10 @@ typedef struct {
 // Encoder pin definitions
 #define ENC1_A_PIN                    PIO_PA5
 #define ENC1_B_PIN                    PIO_PA1
-#define ENC1_ENABLE_PIN               PIO_PD0
+#define ENC1_ENABLE_PIN               PIO_PD17
 #define ENC2_A_PIN                    PIO_PA15
 #define ENC2_B_PIN                    PIO_PA16
-#define ENC2_ENABLE_PIN               PIO_PD1
+#define ENC2_ENABLE_PIN               PIO_PD27
 
 // Encoder availability
 #define ENCODER2_AVAILABLE            1  // Set to 0 if only one encoder is available

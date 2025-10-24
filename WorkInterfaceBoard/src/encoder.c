@@ -57,13 +57,13 @@ bool encoder_init(void)
     // Enable PIO clocks for enable pins
     pmc_enable_periph_clk(ID_PIOD);
     
-    // Configure enable pins as outputs and set them low (enable encoders)
+    // Configure enable pins as outputs and set them high (enable encoders)
     pio_configure(PIOD, PIO_OUTPUT_0, ENC1_ENABLE_PIN, PIO_DEFAULT);
-    pio_clear(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1 (set low)
+    pio_set(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1 (set high)
     
     if (ENCODER2_AVAILABLE) {
         pio_configure(PIOD, PIO_OUTPUT_0, ENC2_ENABLE_PIN, PIO_DEFAULT);
-        pio_clear(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2 (set low)
+        pio_set(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2 (set high)
     }
     
     return true;
@@ -113,16 +113,28 @@ bool encoder_tc_channel_init(uint32_t channel)
                       TC_BMR_POSEN |                   // Enable position counting
                       TC_BMR_SPEEDEN |                 // Enable speed counting
                       TC_BMR_FILTER |                  // Enable glitch filter
-                      TC_BMR_MAXFILT(TC_QUADRATURE_FILTER); // Set filter value
+                      TC_BMR_MAXFILT(TC_QUADRATURE_FILTER) | // Set filter value
+                      TC_BMR_TC0XC0S_TIOA0 |           // Connect TIOA0 to XC0 for encoder 1
+                      TC_BMR_TC1XC1S_TIOA1;            // Connect TIOA1 to XC1 for encoder 2
     }
     
     // Configure channel mode register for quadrature decoder
-    // For SAM4E TC quadrature decoder, use proper configuration
-    TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Use internal clock
-                                      TC_CMR_BURST_NONE;             // No external gating
+    // For SAM4E TC quadrature decoder, use external clock from encoder signals
+    if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
+        TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC0 |  // Use XC0 clock (TIOA0)
+                                      TC_CMR_BURST_NONE;        // No external gating
+    } else if (channel == TC_QUADRATURE_CHANNEL_ENC2) {
+        TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC1 |  // Use XC1 clock (TIOA1)
+                                      TC_CMR_BURST_NONE;        // No external gating
+    }
     
     // Enable the channel
     TC0->TC_CHANNEL[channel].TC_CCR = TC_CCR_CLKEN | TC_CCR_SWTRG;
+    
+    // Debug: Store register values for verification
+    volatile uint32_t tc_bmr = TC0->TC_BMR;
+    volatile uint32_t tc_cmr = TC0->TC_CHANNEL[channel].TC_CMR;
+    volatile uint32_t tc_cv = TC0->TC_CHANNEL[channel].TC_CV;
     
     return true;
 }
@@ -168,6 +180,12 @@ void encoder_poll(encoder_data_t* enc_data)
     
     // Read current position from TC counter
     uint32_t current_position = encoder_tc_get_position(enc_data->tc_channel);
+    
+    // Debug: Store current TC register values for debugging
+    volatile uint32_t tc_cv = TC0->TC_CHANNEL[enc_data->tc_channel].TC_CV;
+    volatile uint32_t tc_cmr = TC0->TC_CHANNEL[enc_data->tc_channel].TC_CMR;
+    volatile uint32_t tc_bmr = TC0->TC_BMR;
+    volatile uint32_t tc_qisr = TC0->TC_QISR;
     
     // Check for position change
     if (current_position != enc_data->last_position) {
@@ -294,6 +312,10 @@ void encoder_task(void *arg)
         
         // Send encoder data over CAN periodically
         if (current_time - last_transmission_time >= ENCODER_POLLING_RATE_MS) {
+            // Debug: Add some test data to verify CAN is working
+            static uint32_t debug_counter = 0;
+            debug_counter++;
+            
             // Prepare CAN message for encoder 1
             // Message format: [Direction(1)] [Velocity(3)] [Position(4)]
             // Direction: 0=stopped, 1=forward, 2=reverse
@@ -310,10 +332,15 @@ void encoder_task(void *arg)
             enc1_data[3] = (uint8_t)((encoder1_data.velocity >> 16) & 0xFF);
             
             // Pack position (4 bytes) - unsigned 32-bit value
-            enc1_data[4] = (uint8_t)(encoder1_data.position & 0xFF);
-            enc1_data[5] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
-            enc1_data[6] = (uint8_t)((encoder1_data.position >> 16) & 0xFF);
-            enc1_data[7] = (uint8_t)((encoder1_data.position >> 24) & 0xFF);
+            // For debugging, include some test data
+            uint32_t debug_position = encoder1_data.position;
+            if (debug_position == 0) {
+                debug_position = debug_counter; // Use debug counter if position is 0
+            }
+            enc1_data[4] = (uint8_t)(debug_position & 0xFF);
+            enc1_data[5] = (uint8_t)((debug_position >> 8) & 0xFF);
+            enc1_data[6] = (uint8_t)((debug_position >> 16) & 0xFF);
+            enc1_data[7] = (uint8_t)((debug_position >> 24) & 0xFF);
             
             can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc1_data, 8);
             
