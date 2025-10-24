@@ -13,8 +13,8 @@ void board_init(void)
     /***********************
      * ENCODER PINS
      ***********************/
-    // Encoder 1 pins (PA0, PA1) - configured as TC peripheral pins
-    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA0, PIO_DEFAULT);  // TIOA0
+    // Encoder 1 pins (PA5, PA1) - configured as TC peripheral pins
+    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA5, PIO_DEFAULT);  // TIOA0
     pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1, PIO_DEFAULT);  // TIOB0
     
     // Encoder 2 pins (PA15, PA16) - configured as TC peripheral pins
