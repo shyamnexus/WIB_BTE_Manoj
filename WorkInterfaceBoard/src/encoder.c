@@ -3,8 +3,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "can_app.h"
-#include "pio_handler.h"
-#include "interrupt.h"
 
 // Encoder data structures
 static encoder_data_t encoder1_data = {0};
@@ -41,103 +39,6 @@ typedef struct {
 static simple_encoder_t enc1_simple = {0};
 static simple_encoder_t enc2_simple = {0};
 
-// Interrupt handler for encoder 1 pins
-void encoder1_interrupt_handler(uint32_t id, uint32_t mask)
-{
-    // Read current state of both pins
-    uint8_t current_state = 0;
-    if (pio_get(PIOA, PIO_INPUT, PIO_PA5)) current_state |= 0x01; // A bit
-    if (pio_get(PIOA, PIO_INPUT, PIO_PA1)) current_state |= 0x02; // B bit
-    
-    // Only process if state changed
-    if (current_state != enc1_simple.current_state) {
-        // Calculate direction using state table
-        int8_t direction = state_table[(enc1_simple.last_state << 2) | current_state];
-        
-        if (direction != 0) {
-            // Update position
-            enc1_simple.position += direction;
-            
-            // Update velocity calculation
-            uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            enc1_simple.pulse_count++;
-            
-            // Calculate velocity every VELOCITY_WINDOW_MS
-            if (current_time - enc1_simple.velocity_window_start >= VELOCITY_WINDOW_MS) {
-                uint32_t time_delta = current_time - enc1_simple.velocity_window_start;
-                if (time_delta > 0) {
-                    enc1_simple.velocity = (enc1_simple.pulse_count * 1000) / time_delta;
-                    if (direction < 0) {
-                        enc1_simple.velocity = -enc1_simple.velocity; // Negative for reverse
-                    }
-                }
-                enc1_simple.velocity_window_start = current_time;
-                enc1_simple.pulse_count = 0;
-            }
-            
-            enc1_simple.last_pulse_time = current_time;
-        }
-        
-        enc1_simple.last_state = enc1_simple.current_state;
-        enc1_simple.current_state = current_state;
-        enc1_simple.state_changed = true;
-        
-        // Send immediate CAN message for pin state changes (like your optimization)
-        uint8_t pin_a_state = (current_state & 0x01) ? 1 : 0;
-        uint8_t pin_b_state = (current_state & 0x02) ? 1 : 0;
-        uint8_t payload[2] = { pin_a_state, pin_b_state };
-        can_app_tx(CAN_ID_ENCODER1_PINS, payload, 2);
-    }
-}
-
-// Interrupt handler for encoder 2 pins
-void encoder2_interrupt_handler(uint32_t id, uint32_t mask)
-{
-    // Read current state of both pins
-    uint8_t current_state = 0;
-    if (pio_get(PIOA, PIO_INPUT, PIO_PA15)) current_state |= 0x01; // A bit
-    if (pio_get(PIOA, PIO_INPUT, PIO_PA16)) current_state |= 0x02; // B bit
-    
-    // Only process if state changed
-    if (current_state != enc2_simple.current_state) {
-        // Calculate direction using state table
-        int8_t direction = state_table[(enc2_simple.last_state << 2) | current_state];
-        
-        if (direction != 0) {
-            // Update position
-            enc2_simple.position += direction;
-            
-            // Update velocity calculation
-            uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            enc2_simple.pulse_count++;
-            
-            // Calculate velocity every VELOCITY_WINDOW_MS
-            if (current_time - enc2_simple.velocity_window_start >= VELOCITY_WINDOW_MS) {
-                uint32_t time_delta = current_time - enc2_simple.velocity_window_start;
-                if (time_delta > 0) {
-                    enc2_simple.velocity = (enc2_simple.pulse_count * 1000) / time_delta;
-                    if (direction < 0) {
-                        enc2_simple.velocity = -enc2_simple.velocity; // Negative for reverse
-                    }
-                }
-                enc2_simple.velocity_window_start = current_time;
-                enc2_simple.pulse_count = 0;
-            }
-            
-            enc2_simple.last_pulse_time = current_time;
-        }
-        
-        enc2_simple.last_state = enc2_simple.current_state;
-        enc2_simple.current_state = current_state;
-        enc2_simple.state_changed = true;
-        
-        // Send immediate CAN message for pin state changes (like your optimization)
-        uint8_t pin_a_state = (current_state & 0x01) ? 1 : 0;
-        uint8_t pin_b_state = (current_state & 0x02) ? 1 : 0;
-        uint8_t payload[2] = { pin_a_state, pin_b_state };
-        can_app_tx(CAN_ID_ENCODER2_PINS, payload, 2);
-    }
-}
 
 // Quadrature encoder state table for direction detection
 // State transitions: 00->01->11->10->00 (forward) or 00->10->11->01->00 (reverse)
@@ -198,31 +99,16 @@ bool encoder_init(void)
     pmc_enable_periph_clk(ID_PIOA);
     pmc_enable_periph_clk(ID_PIOD);
     
-    // Configure encoder pins as inputs with pull-ups and interrupt capability
+    // Configure encoder pins as inputs with pull-ups
     // Encoder 1: PA5 (A), PA1 (B)
-    pio_configure(PIOA, PIO_INPUT, PIO_PA5, PIO_PULLUP | PIO_IT_EDGE);
-    pio_configure(PIOA, PIO_INPUT, PIO_PA1, PIO_PULLUP | PIO_IT_EDGE);
+    pio_configure(PIOA, PIO_INPUT, PIO_PA5, PIO_PULLUP);
+    pio_configure(PIOA, PIO_INPUT, PIO_PA1, PIO_PULLUP);
     
     // Encoder 2: PA15 (A), PA16 (B)
     if (ENCODER2_AVAILABLE) {
-        pio_configure(PIOA, PIO_INPUT, PIO_PA15, PIO_PULLUP | PIO_IT_EDGE);
-        pio_configure(PIOA, PIO_INPUT, PIO_PA16, PIO_PULLUP | PIO_IT_EDGE);
+        pio_configure(PIOA, PIO_INPUT, PIO_PA15, PIO_PULLUP);
+        pio_configure(PIOA, PIO_INPUT, PIO_PA16, PIO_PULLUP);
     }
-    
-    // Set up interrupt handlers for encoder pins
-    pio_handler_set(PIOA, ID_PIOA, PIO_PA5 | PIO_PA1, PIO_IT_EDGE, encoder1_interrupt_handler);
-    pio_enable_interrupt(PIOA, PIO_PA5 | PIO_PA1);
-    
-    if (ENCODER2_AVAILABLE) {
-        pio_handler_set(PIOA, ID_PIOA, PIO_PA15 | PIO_PA16, PIO_IT_EDGE, encoder2_interrupt_handler);
-        pio_enable_interrupt(PIOA, PIO_PA15 | PIO_PA16);
-    }
-    
-    // Set interrupt priority (higher priority for better responsiveness)
-    pio_handler_set_priority(PIOA, PIOA_IRQn, 5);
-    
-    // Enable interrupts globally
-    NVIC_EnableIRQ(PIOA_IRQn);
     
     // Configure enable pins as outputs and set them low (enable encoders)
     pio_configure(PIOD, PIO_OUTPUT_0, ENC1_ENABLE_PIN, PIO_DEFAULT);
@@ -255,12 +141,47 @@ uint8_t read_encoder_state(uint8_t encoder_num)
     return 0;
 }
 
-// Process encoder using simple state machine (now handled in interrupt)
-// This function is kept for compatibility but is no longer used
+// Process encoder using simple state machine
 void process_encoder(simple_encoder_t* enc, uint8_t encoder_num)
 {
-    // This function is now handled by interrupt handlers
-    // Kept for compatibility but not used
+    uint8_t current_state = read_encoder_state(encoder_num);
+    
+    // Only process if state changed
+    if (current_state != enc->current_state) {
+        // Calculate direction using state table
+        int8_t direction = state_table[(enc->last_state << 2) | current_state];
+        
+        if (direction != 0) {
+            // Update position
+            enc->position += direction;
+            
+            // Update velocity calculation
+            uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+            enc->pulse_count++;
+            
+            // Calculate velocity every VELOCITY_WINDOW_MS
+            if (current_time - enc->velocity_window_start >= VELOCITY_WINDOW_MS) {
+                uint32_t time_delta = current_time - enc->velocity_window_start;
+                if (time_delta > 0) {
+                    enc->velocity = (enc->pulse_count * 1000) / time_delta;
+                    if (direction < 0) {
+                        enc->velocity = -enc->velocity; // Negative for reverse
+                    }
+                }
+                enc->velocity_window_start = current_time;
+                enc->pulse_count = 0;
+            }
+            
+            enc->last_pulse_time = current_time;
+            
+            // Debug output (can be removed in production)
+            // printf("Encoder %d: State %d->%d, Dir %d, Pos %d\n", 
+            //        encoder_num, enc->last_state, current_state, direction, enc->position);
+        }
+        
+        enc->last_state = enc->current_state;
+        enc->current_state = current_state;
+    }
 }
 
 // Update encoder data from interrupt-driven state
@@ -311,15 +232,90 @@ void encoder_task(void *arg)
     // Wait a bit for encoders to stabilize
     vTaskDelay(pdMS_TO_TICKS(100));
     
+    // Previous pin states for change detection
+    uint8_t pin_a_state_prev = 0;
+    uint8_t pin_b_state_prev = 0;
+    uint8_t pin_a2_state_prev = 0;
+    uint8_t pin_b2_state_prev = 0;
+    
     uint32_t last_transmission_time = 0;
     
     for (;;) {
         uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
         
-        // Poll both encoders
-        encoder_poll(&encoder1_data);
+        // Read encoder 1 pin states
+        uint8_t pin_a_state = pio_get(PIOA, PIO_INPUT, PIO_PA5) ? 1 : 0;
+        uint8_t pin_b_state = pio_get(PIOA, PIO_INPUT, PIO_PA1) ? 1 : 0;
+        
+        // Prepare CAN message with pin states
+        uint8_t payload[2] = { pin_a_state, pin_b_state };
+        
+        // Send over CAN with ID 0x188 if pin states changed
+        if ((pin_a_state_prev != pin_a_state) || (pin_b_state_prev != pin_b_state)) {
+            can_app_tx(CAN_ID_ENCODER1_PINS, payload, 2);
+            pin_a_state_prev = pin_a_state;
+            pin_b_state_prev = pin_b_state;
+        }
+        
+        // Process encoder 1 using simple state machine
+        process_encoder(&enc1_simple, 1);
+        
+        // Update encoder 1 data structure
+        encoder1_data.position = (uint32_t)enc1_simple.position;
+        encoder1_data.velocity = enc1_simple.velocity;
+        encoder1_data.smoothed_velocity = enc1_simple.velocity;
+        
+        // Determine direction for encoder 1
+        if (enc1_simple.velocity > 0) {
+            encoder1_data.direction = 1; // Forward
+        } else if (enc1_simple.velocity < 0) {
+            encoder1_data.direction = 2; // Reverse
+        } else {
+            // Check if we've had recent movement
+            if (current_time - enc1_simple.last_pulse_time > 50) { // 50ms timeout
+                encoder1_data.direction = 0; // Stopped
+            }
+        }
+        
+        encoder1_data.last_update_time = current_time;
+        
+        // Handle encoder 2 if available
         if (ENCODER2_AVAILABLE) {
-            encoder_poll(&encoder2_data);
+            // Read encoder 2 pin states
+            uint8_t pin_a2_state = pio_get(PIOA, PIO_INPUT, PIO_PA15) ? 1 : 0;
+            uint8_t pin_b2_state = pio_get(PIOA, PIO_INPUT, PIO_PA16) ? 1 : 0;
+            
+            // Prepare CAN message with pin states
+            uint8_t payload2[2] = { pin_a2_state, pin_b2_state };
+            
+            // Send over CAN with ID 0x189 if pin states changed
+            if ((pin_a2_state_prev != pin_a2_state) || (pin_b2_state_prev != pin_b2_state)) {
+                can_app_tx(CAN_ID_ENCODER2_PINS, payload2, 2);
+                pin_a2_state_prev = pin_a2_state;
+                pin_b2_state_prev = pin_b2_state;
+            }
+            
+            // Process encoder 2 using simple state machine
+            process_encoder(&enc2_simple, 2);
+            
+            // Update encoder 2 data structure
+            encoder2_data.position = (uint32_t)enc2_simple.position;
+            encoder2_data.velocity = enc2_simple.velocity;
+            encoder2_data.smoothed_velocity = enc2_simple.velocity;
+            
+            // Determine direction for encoder 2
+            if (enc2_simple.velocity > 0) {
+                encoder2_data.direction = 1; // Forward
+            } else if (enc2_simple.velocity < 0) {
+                encoder2_data.direction = 2; // Reverse
+            } else {
+                // Check if we've had recent movement
+                if (current_time - enc2_simple.last_pulse_time > 50) { // 50ms timeout
+                    encoder2_data.direction = 0; // Stopped
+                }
+            }
+            
+            encoder2_data.last_update_time = current_time;
         }
         
         // Send encoder data over CAN periodically
@@ -376,8 +372,8 @@ void encoder_task(void *arg)
             last_transmission_time = current_time;
         }
         
-        // Small delay to prevent excessive CPU usage
-        vTaskDelay(pdMS_TO_TICKS(1));
+        // Poll at 10ms intervals (100 Hz)
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
