@@ -57,13 +57,13 @@ bool encoder_init(void)
     // Enable PIO clocks for enable pins
     pmc_enable_periph_clk(ID_PIOD);
     
-    // Configure enable pins as outputs and set them high (enable encoders)
+    // Configure enable pins as outputs and set them low (enable encoders)
     pio_configure(PIOD, PIO_OUTPUT_0, ENC1_ENABLE_PIN, PIO_DEFAULT);
-    pio_set(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1 (set high)
+    pio_clear(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1 (set low)
     
     if (ENCODER2_AVAILABLE) {
         pio_configure(PIOD, PIO_OUTPUT_0, ENC2_ENABLE_PIN, PIO_DEFAULT);
-        pio_set(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2 (set high)
+        pio_clear(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2 (set low)
     }
     
     return true;
@@ -95,11 +95,11 @@ bool encoder_tc_channel_init(uint32_t channel)
 {
     // Configure PIO for TC TIOA and TIOB pins
     if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
-        // Configure PA5 as TIOA0 and PA1 as TIOB0
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA5, PIO_DEFAULT);  // TIOA0
+        // Configure PA0 as TIOA0 and PA1 as TIOB0
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA0, PIO_DEFAULT);  // TIOA0
         pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1, PIO_DEFAULT);  // TIOB0
     } else if (channel == TC_QUADRATURE_CHANNEL_ENC2) {
-        // Configure PA15 as TIOA1 and PA16 as TIOB1
+        // Configure PA15 as TIOA1 and PA16 as TIOB1 (disabled due to SPI conflict)
         pio_configure(PIOA, PIO_PERIPH_A, PIO_PA15, PIO_DEFAULT); // TIOA1
         pio_configure(PIOA, PIO_PERIPH_A, PIO_PA16, PIO_DEFAULT); // TIOB1
     } else {
@@ -114,17 +114,13 @@ bool encoder_tc_channel_init(uint32_t channel)
                       TC_BMR_SPEEDEN |                 // Enable speed counting
                       TC_BMR_FILTER |                  // Enable glitch filter
                       TC_BMR_MAXFILT(TC_QUADRATURE_FILTER) | // Set filter value
-                      TC_BMR_TC0XC0S_TIOA0 |           // Connect TIOA0 to XC0 for encoder 1
-                      TC_BMR_TC1XC1S_TIOA1;            // Connect TIOA1 to XC1 for encoder 2
+                      TC_BMR_TC0XC0S_TIOA0;            // Connect TIOA0 to XC0 for encoder 1
     }
     
     // Configure channel mode register for quadrature decoder
     // For SAM4E TC quadrature decoder, use external clock from encoder signals
     if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
         TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC0 |  // Use XC0 clock (TIOA0)
-                                      TC_CMR_BURST_NONE;        // No external gating
-    } else if (channel == TC_QUADRATURE_CHANNEL_ENC2) {
-        TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC1 |  // Use XC1 clock (TIOA1)
                                       TC_CMR_BURST_NONE;        // No external gating
     }
     

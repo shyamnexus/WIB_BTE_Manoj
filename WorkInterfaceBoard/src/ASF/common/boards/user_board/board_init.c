@@ -13,17 +13,17 @@ void board_init(void)
     /***********************
      * ENCODER PINS
      ***********************/
-    // Encoder 1 pins (PA5, PA1) - configured as inputs with pull-up
-    pio_set_input(PIOA, PIO_PA5, PIO_PULLUP);  // ENC1_A
-    pio_set_input(PIOA, PIO_PA1, PIO_PULLUP);  // ENC1_B
+    // Encoder 1 pins (PA0, PA1) - configured as TC peripheral pins
+    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA0, PIO_DEFAULT);  // TIOA0
+    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1, PIO_DEFAULT);  // TIOB0
     
-    // Encoder 2 pins (PA15 conflicts with DRDY, using PA16 for ENC2_B)
-    // Note: PA15 is used for SPI DRDY, so ENC2_A functionality is disabled
-    pio_set_input(PIOA, PIO_PA16, PIO_PULLUP); // ENC2_B
-    pio_set_input(PIOA, PIO_PA15, PIO_PULLUP);  // ENC1_A
-    // Encoder enable pins (PD17, PD27) - configured as outputs, high = enabled
-    pio_set_output(PIOD, PIO_PD17, 1, 0, 0);  // ENC1_ENABLE
-    pio_set_output(PIOD, PIO_PD27, 1, 0, 0);  // ENC2_ENABLE
+    // Encoder 2 disabled due to pin conflict with SPI DRDY (PA15)
+    // PA15 is used for SPI DRDY, so encoder 2 is not available
+    // Encoder enable pins (PD17, PD27) - configured as outputs, low = enabled
+    pio_set_output(PIOD, PIO_PD17, 1, 0, 0);  // ENC1_ENABLE (initially high)
+    pio_set_output(PIOD, PIO_PD27, 1, 0, 0);  // ENC2_ENABLE (initially high)
+    pio_clear(PIOD, PIO_PD17);  // Enable encoder 1 (set low)
+    pio_clear(PIOD, PIO_PD27);  // Enable encoder 2 (set low)
 
 
 }
