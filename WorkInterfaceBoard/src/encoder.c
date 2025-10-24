@@ -8,6 +8,10 @@
 static encoder_data_t encoder1_data = {0};
 static encoder_data_t encoder2_data = {0};
 
+// Volatile counter for interrupt-based pulse counting
+volatile uint32_t encoder1_pulse_count = 0;
+volatile uint32_t encoder1_last_interrupt_time = 0;
+
 // CAN message IDs for encoder data
 #define CAN_ID_ENCODER1_DIR_VEL    0x130u  // Encoder 1 direction and velocity
 #define CAN_ID_ENCODER2_DIR_VEL    0x131u  // Encoder 2 direction and velocity
@@ -70,6 +74,84 @@ bool encoder_init(void)
     encoder2_data.velocity_window_start = 0;
     
     return true;
+}
+
+bool encoder_interrupt_init(void)
+{
+    // Enable PIO clocks for encoder pins
+    pmc_enable_periph_clk(ID_PIOA);
+    pmc_enable_periph_clk(ID_PIOD);
+    
+    // Configure encoder pins as inputs with pull-up
+    pio_configure(PIOA, PIO_INPUT, ENC1_A_PIN, PIO_PULLUP | PIO_DEBOUNCE);
+    pio_configure(PIOA, PIO_INPUT, ENC1_B_PIN, PIO_PULLUP | PIO_DEBOUNCE);
+    
+    // Configure enable pins as outputs and set them high (enable encoders)
+    pio_configure(PIOD, PIO_OUTPUT_0, ENC1_ENABLE_PIN, PIO_DEFAULT);
+    pio_clear(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1
+    
+    // Configure interrupt for both encoder pins
+    // Enable interrupt on both rising and falling edges for quadrature decoding
+    if (pio_handler_set(PIOA, ID_PIOA, ENC1_A_PIN | ENC1_B_PIN, PIO_IT_EDGE, encoder_interrupt_handler) != 0) {
+        // Failed to set interrupt handler
+        return false;
+    }
+    
+    // Set interrupt priority
+    NVIC_SetPriority(PIOA_IRQn, ENCODER_INTERRUPT_PRIORITY);
+    NVIC_EnableIRQ(PIOA_IRQn);
+    
+    // Enable PIO interrupts
+    pio_enable_interrupt(PIOA, ENC1_A_PIN | ENC1_B_PIN);
+    
+    // Initialize pulse counter
+    encoder1_pulse_count = 0;
+    encoder1_last_interrupt_time = 0;
+    
+    // Debug: Store initialization status
+    volatile uint32_t debug_encoder_interrupt_init_success = 1;
+    
+    return true;
+}
+
+void encoder_interrupt_handler(const uint32_t id, const uint32_t index)
+{
+    (void)id;   // Unused parameter
+    (void)index; // Unused parameter
+    
+    // Get interrupt status
+    uint32_t status = pio_get_interrupt_status(PIOA);
+    
+    // Debug: Store interrupt status for debugging
+    volatile uint32_t debug_interrupt_status = status;
+    
+    // Check if our pins triggered the interrupt
+    if (status & (ENC1_A_PIN | ENC1_B_PIN)) {
+        // Simple debouncing - check if enough time has passed since last interrupt
+        uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        if (current_time - encoder1_last_interrupt_time > ENCODER_DEBOUNCE_US / 1000) {
+            // Increment pulse counter
+            encoder1_pulse_count++;
+            encoder1_last_interrupt_time = current_time;
+            
+            // Debug: Store pulse count for debugging
+            volatile uint32_t debug_pulse_count = encoder1_pulse_count;
+        }
+    }
+    
+    // Clear interrupt status
+    pio_disable_interrupt(PIOA, ENC1_A_PIN | ENC1_B_PIN);
+    pio_enable_interrupt(PIOA, ENC1_A_PIN | ENC1_B_PIN);
+}
+
+uint32_t encoder_get_pulse_count(void)
+{
+    return encoder1_pulse_count;
+}
+
+void encoder_reset_pulse_count(void)
+{
+    encoder1_pulse_count = 0;
 }
 
 void encoder_poll(encoder_data_t* enc_data)
@@ -236,8 +318,8 @@ void encoder_task(void *arg)
 {
     (void)arg; // Unused parameter
     
-    // Initialize encoders
-    if (!encoder_init()) {
+    // Initialize encoders with interrupt-based approach
+    if (!encoder_interrupt_init()) {
         // Encoder initialization failed
         while(1) {
             vTaskDelay(pdMS_TO_TICKS(1000));
@@ -247,48 +329,52 @@ void encoder_task(void *arg)
     // Wait a bit for encoders to stabilize
     vTaskDelay(pdMS_TO_TICKS(100));
     
+    uint32_t last_pulse_count = 0;
+    uint32_t last_transmission_time = 0;
+    
     for (;;) {
-        // Poll both encoders
-        encoder_poll(&encoder1_data);
-        if (ENCODER2_AVAILABLE) {
-            encoder_poll(&encoder2_data);
-        }
+        // Get current pulse count from interrupt handler
+        uint32_t current_pulse_count = encoder_get_pulse_count();
+        uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
         
-        // Send encoder 1 data over CAN
-        uint8_t enc1_data[6];
-		if (encoder1_data.smoothed_velocity <0) encoder1_data.smoothed_velocity = encoder1_data.smoothed_velocity * (-1);
-        enc1_data[0] = (uint8_t)(encoder1_data.direction & 0xFF);
-        enc1_data[1] = (uint8_t)(encoder1_data.smoothed_velocity & 0xFF);
-        enc1_data[2] = (uint8_t)((encoder1_data.smoothed_velocity >> 8) & 0xFF);
-        enc1_data[3] = (uint8_t)((encoder1_data.smoothed_velocity >> 16) & 0xFF);
-        enc1_data[4] = (uint8_t)((encoder1_data.smoothed_velocity >> 24) & 0xFF);
-        enc1_data[5] = (uint8_t)(encoder1_data.position & 0xFF);
+        // Calculate velocity based on pulse count difference
+        uint32_t pulse_delta = current_pulse_count - last_pulse_count;
+        uint32_t time_delta = current_time - last_transmission_time;
         
-        can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc1_data, 6);
-        
-        // Debug: Store encoder data for debugging
-        volatile uint32_t debug_enc1_direction = encoder1_data.direction;
-        volatile uint32_t debug_enc1_velocity = encoder1_data.velocity;
-        volatile uint32_t debug_enc1_smoothed_velocity = encoder1_data.smoothed_velocity;
-        volatile uint32_t debug_enc1_position = encoder1_data.position;
-        
-        // Send encoder 2 data over CAN (only if available)
-        if (ENCODER2_AVAILABLE) {
-            uint8_t enc2_data[6];
-			if (encoder2_data.smoothed_velocity <0){
-				 encoder2_data.smoothed_velocity = encoder2_data.smoothed_velocity * (-1);
-			}
-            enc2_data[0] = (uint8_t)(encoder2_data.direction & 0xFF);
-            enc2_data[1] = (uint8_t)(encoder2_data.smoothed_velocity & 0xFF);
-            enc2_data[2] = (uint8_t)((encoder2_data.smoothed_velocity >> 8) & 0xFF);
-            enc2_data[3] = (uint8_t)((encoder2_data.smoothed_velocity >> 16) & 0xFF);
-            enc2_data[4] = (uint8_t)((encoder2_data.smoothed_velocity >> 24) & 0xFF);
-            enc2_data[5] = (uint8_t)(encoder2_data.position & 0xFF);
+        // Send encoder 1 data over CAN periodically
+        if (time_delta >= ENCODER_POLLING_RATE_MS) {
+            // Prepare CAN message with pulse count and calculated velocity
+            uint8_t enc1_data[8];
             
-            can_app_tx(CAN_ID_ENCODER2_DIR_VEL, enc2_data, 6);
+            // Pack pulse count (4 bytes)
+            enc1_data[0] = (uint8_t)(current_pulse_count & 0xFF);
+            enc1_data[1] = (uint8_t)((current_pulse_count >> 8) & 0xFF);
+            enc1_data[2] = (uint8_t)((current_pulse_count >> 16) & 0xFF);
+            enc1_data[3] = (uint8_t)((current_pulse_count >> 24) & 0xFF);
+            
+            // Calculate and pack velocity (pulses per second)
+            uint32_t velocity = 0;
+            if (time_delta > 0) {
+                velocity = (pulse_delta * 1000) / time_delta;
+            }
+            enc1_data[4] = (uint8_t)(velocity & 0xFF);
+            enc1_data[5] = (uint8_t)((velocity >> 8) & 0xFF);
+            enc1_data[6] = (uint8_t)((velocity >> 16) & 0xFF);
+            enc1_data[7] = (uint8_t)((velocity >> 24) & 0xFF);
+            
+            can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc1_data, 8);
+            
+            // Debug: Store encoder data for debugging
+            volatile uint32_t debug_enc1_pulse_count = current_pulse_count;
+            volatile uint32_t debug_enc1_velocity = velocity;
+            volatile uint32_t debug_enc1_pulse_delta = pulse_delta;
+            
+            // Update for next calculation
+            last_pulse_count = current_pulse_count;
+            last_transmission_time = current_time;
         }
         
-        // Wait for next polling cycle
+        // Wait for next transmission cycle
         vTaskDelay(pdMS_TO_TICKS(ENCODER_POLLING_RATE_MS));
     }
 }
