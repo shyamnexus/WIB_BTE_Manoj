@@ -60,17 +60,18 @@ void task_encoder1_pin_monitor(void *arg){
 		// Send over CAN with ID 0x188
 		can_app_tx(CAN_ID_ENCODER1_PINS, payload, 2);
 		
-		// For 10MHz polling, we need to delay for 0.1 microseconds
-		// Since FreeRTOS tick resolution is typically 1ms, we'll use the smallest possible delay
-		// and rely on the tight loop for high frequency polling
-		vTaskDelay(pdMS_TO_TICKS(0)); // Minimum delay - will yield to scheduler
+		// Poll at 10ms intervals (100 Hz)
+		vTaskDelay(pdMS_TO_TICKS(10));
 	}
 }
 void create_application_tasks(void)
 {
-	
+	// Only create CAN tasks and encoder 1 pin monitor task
 	xTaskCreate(can_rx_task, "canrx", 512, 0, tskIDLE_PRIORITY+2, 0); // CAN RX handler task
 	xTaskCreate(can_status_task, "canstatus", 256, 0, tskIDLE_PRIORITY+1, 0); // CAN status monitoring task
-	xTaskCreate(task_test, "testTask", 512, 0, tskIDLE_PRIORITY+2, 0); // Load cell sampling task
-	xTaskCreate(encoder_task, "encoder", 512, 0, tskIDLE_PRIORITY+2, 0); // Encoder polling and CAN transmission task
+	xTaskCreate(task_encoder1_pin_monitor, "enc1pins", 512, 0, tskIDLE_PRIORITY+2, 0); // Encoder 1 pin monitoring task
+	
+	// All other tasks disabled as requested
+	// xTaskCreate(task_test, "testTask", 512, 0, tskIDLE_PRIORITY+2, 0); // Load cell sampling task - DISABLED
+	// xTaskCreate(encoder_task, "encoder", 512, 0, tskIDLE_PRIORITY+2, 0); // Encoder polling and CAN transmission task - DISABLED
 } // End create_application_tasks
