@@ -52,19 +52,6 @@ int main (void)
 	
 	/* Note: Encoder initialization is handled in the encoder_task with interrupt-based approach */
 	
-// 	/* Test CAN communication (optional - can be disabled for production) */
-// 	// Simple CAN controller state test first
-// 	if (!can_app_simple_test()) {
-// 		// CAN controller not in good state - check debug variables
-// 		volatile uint32_t debug_simple_test_failed = 1;
-// 	}
-// 	
-// 	// Uncomment the following lines to enable CAN self-test
-// 	if (!can_app_test_loopback()) {
-// 		// CAN test failed - but continue anyway for now
-// 		// In production, you might want to handle this differently
-// 		volatile uint32_t debug_loopback_test_failed = 1;
-// 	}
 
 	/* Create FreeRTOS tasks */
 	create_application_tasks();

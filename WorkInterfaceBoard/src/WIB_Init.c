@@ -16,9 +16,6 @@ int WIB_Init()
 								//initialise SPI0 interface for Load Cell ADS1120
 	//toolsense_init();			//Initialise GPIOs for sensing tool type
 	
-	// Debug: Print SystemCoreClock value
-	// You can check this value in debugger or via UART
-	volatile uint32_t debug_clock = SystemCoreClock;
 	
 	// Initialize I2C0 at 100kHz
 

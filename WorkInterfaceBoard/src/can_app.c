@@ -53,11 +53,7 @@ bool can_app_init(void)
 	uint32_t mck = sysclk_get_peripheral_hz(); // Peripheral clock frequency
 	if (mck == 0) return false; // Invalid clock frequency
 	
-	// DIAGNOSTIC: Store actual clock frequencies for debugging
-	volatile uint32_t debug_peripheral_hz = mck;
-	volatile uint32_t debug_system_core_hz = SystemCoreClock;
 	// Expected: mck = 96,000,000 Hz for proper 500kbps CAN timing
-	// If these values are different, CAN bit rate will be incorrect
 	
 	pmc_enable_periph_clk(ID_CAN0); // Enable CAN0 peripheral clock
 	can0_configure_pins_local(); // Route pins to CAN peripheral
@@ -66,51 +62,10 @@ bool can_app_init(void)
 	delay_ms(10);
 	
 	// Initialize CAN controller with proper baudrate constant
-	// Try 500kbps first (desired rate), then fall back to lower rates if needed
-	volatile uint32_t debug_bitrate_used = 0;
-	if (can_init(CAN0, mck, CAN_BPS_500K));
-//	mck  = mck/6;
-// 	if (can_init(CAN0, mck, CAN_BPS_500K)) {
-// 		debug_bitrate_used = 500; // 500k worked - preferred rate
-// 		/* Override ASF default timing (8..14 TQ) with 16 TQ @ ~81% SP for better margin. */
-// 		can_force_500k_16tq_timing(CAN0, mck);
-// 	} else if (can_init(CAN0, mck, CAN_BPS_250K)) {
-// 		debug_bitrate_used = 250; // 250k worked - fallback
-// 	} else if (can_init(CAN0, mck, CAN_BPS_125K)) {
-// 		debug_bitrate_used = 125; // 125k worked - last resort
-// 	} else {
-// 		// CAN initialization failed - likely due to clock/baudrate mismatch
-// 		volatile uint32_t debug_can_init_fail = 1;
-// 		volatile uint32_t debug_can_sr_after_fail = CAN0->CAN_SR;
-// 		return false; // CAN baudrate configuration failed
-// 	}
+	if (!can_init(CAN0, mck, CAN_BPS_500K)) {
+		return false; // CAN baudrate configuration failed
+	}
 	
-	// DIAGNOSTIC: Check CAN status immediately after init
-	volatile uint32_t debug_can_sr_after_init = CAN0->CAN_SR;
-	volatile uint32_t debug_can_mr_after_init = CAN0->CAN_MR;
-	
-	// DIAGNOSTIC: Read back CAN baudrate register to verify configuration
-	volatile uint32_t debug_can_br = CAN0->CAN_BR;
-	// Decode the CAN_BR register fields for analysis
-	volatile uint32_t debug_phase2 = (debug_can_br & CAN_BR_PHASE2_Msk) >> CAN_BR_PHASE2_Pos;
-	volatile uint32_t debug_phase1 = (debug_can_br & CAN_BR_PHASE1_Msk) >> CAN_BR_PHASE1_Pos;
-	volatile uint32_t debug_propag = (debug_can_br & CAN_BR_PROPAG_Msk) >> CAN_BR_PROPAG_Pos;
-	volatile uint32_t debug_sjw = (debug_can_br & CAN_BR_SJW_Msk) >> CAN_BR_SJW_Pos;
-	volatile uint32_t debug_brp = (debug_can_br & CAN_BR_BRP_Msk) >> CAN_BR_BRP_Pos;
-	// Calculate actual bit rate: mck / ((brp + 1) * (1 + (propag + 1) + (phase1 + 1) + (phase2 + 1)))
-	volatile uint32_t debug_total_tq = 1 + (debug_propag + 1) + (debug_phase1 + 1) + (debug_phase2 + 1);
-	volatile uint32_t debug_actual_bitrate = mck / ((debug_brp + 1) * debug_total_tq);
-	// Expected: debug_actual_bitrate should be 500000 for 500kbps
-	// Additional debugging: Store intermediate calculation values
-	volatile uint32_t debug_brp_plus_1 = debug_brp + 1;
-	volatile uint32_t debug_divisor = debug_brp_plus_1 * debug_total_tq;
-	volatile uint32_t debug_expected_bitrate = debug_bitrate_used * 1000; // Convert kbps to bps
-	
-	// DEBUG: Calculate what 500kbps should look like with current MCK
-	volatile uint32_t debug_target_500k = 500000; // 500kbps in bps
-	volatile uint32_t debug_optimal_divisor = mck / debug_target_500k;
-	volatile uint32_t debug_optimal_brp = debug_optimal_divisor / 16 - 1; // Assuming 16 TQ
-	volatile uint32_t debug_optimal_tq = debug_optimal_divisor / (debug_optimal_brp + 1);
 	
 	can_reset_all_mailbox(CAN0); // Reset all mailboxes to known state
 	
@@ -123,18 +78,11 @@ bool can_app_init(void)
 	mb.ul_id = 0; // Don't filter on specific ID
 	mb.uc_length = 8; // Set MDLC before arming to avoid undefined length
 	
-	// DIAGNOSTIC: Store mailbox configuration for debugging
-	volatile uint32_t debug_mb_idx = mb.ul_mb_idx;
-	volatile uint32_t debug_mb_type = mb.uc_obj_type;
-	volatile uint32_t debug_mb_id_mask = mb.ul_id_msk;
-	volatile uint32_t debug_mb_id = mb.ul_id;
 	
 	can_mailbox_init(CAN0, &mb); // Apply configuration
 	// Arm RX mailbox 0 to start receiving
 	can_mailbox_send_transfer_cmd(CAN0, &mb);
 	
-	// DIAGNOSTIC: Verify mailbox was configured
-	volatile uint32_t debug_mb_status_after_init = can_mailbox_get_status(CAN0, 0);
 	
 	// Initialize TX mailbox 1 for future use
 	can_mb_conf_t tx_init;
@@ -145,14 +93,7 @@ bool can_app_init(void)
 	tx_init.ul_id_msk = 0; // Not used for TX
 	can_mailbox_init(CAN0, &tx_init); // Configure TX mailbox
 	
-	// DIAGNOSTIC: Verify TX mailbox was configured
-	volatile uint32_t debug_tx_mb_status_after_init = can_mailbox_get_status(CAN0, 1);
 	
-	// Verify the bit rate is correct
-	if (!can_verify_bitrate(debug_bitrate_used)) {
-		volatile uint32_t debug_bitrate_verification_failed = 1;
-		// Continue anyway, but flag the issue
-	}
 	
 	return true;
 }
@@ -208,9 +149,6 @@ bool can_app_tx(uint32_t id, const uint8_t *data, uint8_t len)
 	tx.uc_length = len; // DLC
 	
 	if (can_mailbox_write(CAN0, &tx) != CAN_MAILBOX_TRANSFER_OK) {
-		// DIAGNOSTIC: TX write failed
-		volatile uint32_t debug_tx_write_failed = 1;
-		volatile uint32_t debug_mb_status_after_write = can_mailbox_get_status(CAN0, 1);
 		return false; // Load MB failed
 	}
 	
@@ -303,11 +241,6 @@ bool can_app_get_status(void){
 	// Check if there are any error conditions
 	uint32_t status = CAN0->CAN_SR;
 	if (status & (CAN_SR_ERRA | CAN_SR_WARN | CAN_SR_BOFF)) {
-		// DIAGNOSTIC: Store error status for debugging
-		volatile uint32_t debug_can_status = status;
-		volatile uint32_t debug_tx_errors = can_get_tx_error_cnt(CAN0);
-		volatile uint32_t debug_rx_errors = can_get_rx_error_cnt(CAN0);
-		// High error counts often indicate bit rate mismatch
 		return false; // Error conditions present
 	}
 	
@@ -321,9 +254,6 @@ bool can_app_get_status(void){
 
 bool can_app_test_loopback(void)
 {
-	// DIAGNOSTIC: Store initial state
-	volatile uint32_t debug_initial_sr = CAN0->CAN_SR;
-	volatile uint32_t debug_initial_mr = CAN0->CAN_MR;
 	
 	// For SAM4E, implement loopback by configuring two mailboxes:
 	// - MB1 for TX
@@ -363,10 +293,7 @@ bool can_app_test_loopback(void)
 	
 	// Check if TX mailbox is ready
 	uint32_t tx_mb_status = can_mailbox_get_status(CAN0, 1);
-	volatile uint32_t debug_tx_mb_ready = (tx_mb_status & CAN_MSR_MRDY) != 0;
 	if (!(tx_mb_status & CAN_MSR_MRDY)) {
-		// DIAGNOSTIC: TX mailbox not ready
-		volatile uint32_t debug_tx_mb_not_ready = 1;
 		return false;
 	}
 	
@@ -383,17 +310,12 @@ bool can_app_test_loopback(void)
 	tx_mb.uc_length = 4; // DLC
 	
 	if (can_mailbox_write(CAN0, &tx_mb) != CAN_MAILBOX_TRANSFER_OK) {
-		// DIAGNOSTIC: TX failed
-		volatile uint32_t debug_tx_failed = 1;
-		volatile uint32_t debug_tx_sr = CAN0->CAN_SR;
 		return false; // Transmission failed
 	}
 	
 	// Trigger transmission
 	can_global_send_transfer_cmd(CAN0, CAN_TCR_MB1); // Send from MB1
 	
-	// DIAGNOSTIC: TX succeeded, check status
-	volatile uint32_t debug_after_tx_sr = CAN0->CAN_SR;
 	
 	// Wait for message to be transmitted and looped back
 	// In a real CAN network, the TX message should be seen by all nodes including self
@@ -401,8 +323,6 @@ bool can_app_test_loopback(void)
 	
 	// Check if message was received in mailbox 2
 	uint32_t mb_status = can_mailbox_get_status(CAN0, 2); // Check MB2
-	volatile uint32_t debug_mb_status = mb_status;
-	volatile bool debug_msg_ready = (mb_status & CAN_MSR_MRDY) != 0;
 	
 	if (mb_status & CAN_MSR_MRDY) {
 		can_mb_conf_t rx;
@@ -410,12 +330,6 @@ bool can_app_test_loopback(void)
 		if (can_mailbox_read(CAN0, &rx) == CAN_MAILBOX_TRANSFER_OK) {
 			// Verify the received data matches what we sent
 			uint32_t received_id = (rx.ul_id >> CAN_MID_MIDvA_Pos) & 0x7FFu;
-			volatile uint32_t debug_received_id = received_id;
-			volatile uint32_t debug_expected_id = test_id;
-			
-			// DIAGNOSTIC: Check data integrity
-			volatile uint32_t debug_rx_datal = rx.ul_datal;
-			volatile uint32_t debug_rx_datah = rx.ul_datah;
 			
 			// Verify ID and data match
 			if (received_id == test_id && rx.ul_datal == dl) {
@@ -431,26 +345,8 @@ bool can_app_test_loopback(void)
 				can_mailbox_send_transfer_cmd(CAN0, &rx_mb);
 				
 				return true; // Test passed
-			} else {
-				// DIAGNOSTIC: ID or data mismatch
-				volatile uint32_t debug_mismatch = 1;
 			}
-		} else {
-			// DIAGNOSTIC: Mailbox read failed
-			volatile uint32_t debug_mb_read_failed = 1;
 		}
-	} else {
-		// DIAGNOSTIC: No message received 
-		volatile uint32_t debug_no_loopback_rx = 1;
-		volatile uint32_t debug_final_sr = CAN0->CAN_SR;
-		
-		// Check if TX was successful
-		uint32_t tx_status = can_mailbox_get_status(CAN0, 1);
-		volatile uint32_t debug_tx_mb_status = tx_status;
-		
-		// Check error counters
-		volatile uint32_t debug_tx_errors = can_get_tx_error_cnt(CAN0);
-		volatile uint32_t debug_rx_errors = can_get_rx_error_cnt(CAN0);
 	}
 	
 	// Restore mailbox configuration
@@ -466,40 +362,6 @@ bool can_app_test_loopback(void)
 	return false; // Test failed
 }
 
-void can_diagnostic_info(void)
-{
-	// Comprehensive CAN diagnostic information
-	volatile uint32_t can_sr = CAN0->CAN_SR;
-	volatile uint32_t can_mr = CAN0->CAN_MR;
-	volatile uint32_t can_br = CAN0->CAN_BR;
-	volatile uint32_t can_ecr = CAN0->CAN_ECR;
-	
-	// Mailbox statuses
-	volatile uint32_t mb0_status = can_mailbox_get_status(CAN0, 0);
-	volatile uint32_t mb1_status = can_mailbox_get_status(CAN0, 1);
-	volatile uint32_t mb2_status = can_mailbox_get_status(CAN0, 2);
-	
-	// Error counters
-	volatile uint32_t tx_errors = can_get_tx_error_cnt(CAN0);
-	volatile uint32_t rx_errors = can_get_rx_error_cnt(CAN0);
-	
-	// Mailbox ready flags
-	volatile bool mb0_ready = (mb0_status & CAN_MSR_MRDY) != 0;
-	volatile bool mb1_ready = (mb1_status & CAN_MSR_MRDY) != 0;
-	volatile bool mb2_ready = (mb2_status & CAN_MSR_MRDY) != 0;
-	
-	// Error conditions
-	volatile bool bus_off = (can_sr & CAN_SR_BOFF) != 0;
-	volatile bool error_active = (can_sr & CAN_SR_ERRA) != 0;
-	volatile bool warning = (can_sr & CAN_SR_WARN) != 0;
-	
-	// Store all diagnostic info in volatile variables for debugging
-	(void)can_sr; (void)can_mr; (void)can_br; (void)can_ecr;
-	(void)mb0_status; (void)mb1_status; (void)mb2_status;
-	(void)tx_errors; (void)rx_errors;
-	(void)mb0_ready; (void)mb1_ready; (void)mb2_ready;
-	(void)bus_off; (void)error_active; (void)warning;
-}
 
 void can_status_task(void *arg)
 {
@@ -510,10 +372,6 @@ void can_status_task(void *arg)
 		// Check CAN status periodically
 		bool can_ok = can_app_get_status();
 		
-		// Run diagnostics every 5 seconds
-		if (status_report_interval % 5 == 0) {
-			can_diagnostic_info();
-		}
 		
 		// Report status every 10 seconds (10000ms / 1000ms = 10 iterations)
 		status_report_interval++;
@@ -538,29 +396,21 @@ bool can_app_simple_test(void)
 {
 	// Check if CAN controller is in a good state
 	uint32_t can_sr = CAN0->CAN_SR;
-	volatile uint32_t debug_simple_test_sr = can_sr;
 	
 	// Check for bus-off condition
 	if (can_sr & CAN_SR_BOFF) {
-		volatile uint32_t debug_bus_off = 1;
 		return false;
 	}
 	
 	// Check for error active state
 	if (can_sr & CAN_SR_ERRA) {
-		volatile uint32_t debug_error_active = 1;
-		volatile uint32_t debug_tx_errors = can_get_tx_error_cnt(CAN0);
-		volatile uint32_t debug_rx_errors = can_get_rx_error_cnt(CAN0);
 		return false;
 	}
 	
 	// Check if CAN controller is enabled
 	if (!(CAN0->CAN_MR & CAN_MR_CANEN)) {
-		volatile uint32_t debug_can_not_enabled = 1;
 		return false;
 	}
 	
-	// If we get here, CAN controller appears to be in good state
-	volatile uint32_t debug_can_ok = 1;
 	return true;
 }
