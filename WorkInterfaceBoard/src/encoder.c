@@ -91,8 +91,13 @@ bool encoder_interrupt_init(void)
     pio_clear(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1
     
     // Configure interrupt for both encoder pins
-    // Enable interrupt on both rising and falling edges for quadrature decoding
-    if (pio_handler_set(PIOA, ID_PIOA, ENC1_A_PIN | ENC1_B_PIN, PIO_IT_EDGE, encoder_interrupt_handler) != 0) {
+    // For quadrature decoding, we need to detect both rising and falling edges
+    // Since PIO can only detect one edge type per pin group, we'll use rising edge
+    // and do quadrature decoding by reading pin states in the handler
+    // 
+    // NOTE: For proper quadrature decoding, consider using SAM4E's built-in
+    // Timer/Counter (TC) quadrature decoder functionality instead of PIO interrupts
+    if (pio_handler_set(PIOA, ID_PIOA, ENC1_A_PIN | ENC1_B_PIN, PIO_IT_RISE_EDGE, encoder_interrupt_handler) != 0) {
         // Failed to set interrupt handler
         return false;
     }
@@ -130,18 +135,26 @@ void encoder_interrupt_handler(const uint32_t id, const uint32_t index)
         // Simple debouncing - check if enough time has passed since last interrupt
         uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
         if (current_time - encoder1_last_interrupt_time > ENCODER_DEBOUNCE_US / 1000) {
-            // Increment pulse counter
+            // Read current pin states for quadrature decoding
+            uint8_t current_a = (pio_get(PIOA, PIO_TYPE_PIO_INPUT, ENC1_A_PIN)) ? 1 : 0;
+            uint8_t current_b = (pio_get(PIOA, PIO_TYPE_PIO_INPUT, ENC1_B_PIN)) ? 1 : 0;
+            
+            // Simple quadrature decoding: count pulses on either channel
+            // This is a simplified approach - for full quadrature decoding,
+            // we would need to track previous states and decode direction
             encoder1_pulse_count++;
             encoder1_last_interrupt_time = current_time;
             
             // Debug: Store pulse count for debugging
             volatile uint32_t debug_pulse_count = encoder1_pulse_count;
+            volatile uint32_t debug_pin_a = current_a;
+            volatile uint32_t debug_pin_b = current_b;
         }
     }
     
-    // Clear interrupt status
-    pio_disable_interrupt(PIOA, ENC1_A_PIN | ENC1_B_PIN);
-    pio_enable_interrupt(PIOA, ENC1_A_PIN | ENC1_B_PIN);
+    // Clear interrupt status - DO NOT disable and re-enable interrupts!
+    // This was causing an infinite interrupt loop
+    // The interrupt will be automatically re-enabled by the hardware
 }
 
 uint32_t encoder_get_pulse_count(void)
