@@ -11,7 +11,16 @@ static encoder_data_t encoder2_data = {0};
 // CAN message IDs for encoder data
 #define CAN_ID_ENCODER1_DIR_VEL    0x130u  // Encoder 1 direction and velocity
 #define CAN_ID_ENCODER2_DIR_VEL    0x131u  // Encoder 2 direction and velocity
+#ifndef TickType_t
+typedef portTickType TickType_t; // Backward-compatible alias if TickType_t isn't defined
+#endif
+#ifndef pdMS_TO_TICKS
+#define pdMS_TO_TICKS(ms) ((TickType_t)((ms) / portTICK_PERIOD_MS)) // Convert milliseconds to OS ticks
+#endif
 
+#ifndef portTICK_PERIOD_MS
+#define portTICK_PERIOD_MS portTICK_RATE_MS // Legacy macro mapping
+#endif
 bool encoder_init(void)
 {
     // Enable PIO clocks for encoder pins
@@ -26,11 +35,11 @@ bool encoder_init(void)
     
     // Configure enable pins as outputs and set them high (enable encoders)
     pio_configure(PIOD, PIO_OUTPUT_0, ENC1_ENABLE_PIN, PIO_DEFAULT);
-    pio_set(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1
+    pio_clear(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1
     
     if (ENCODER2_AVAILABLE) {
         pio_configure(PIOD, PIO_OUTPUT_0, ENC2_ENABLE_PIN, PIO_DEFAULT);
-        pio_set(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2
+        pio_clear(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2
     }
     
     // Initialize encoder data structures
@@ -185,19 +194,14 @@ int32_t calculate_velocity(encoder_data_t* enc_data, uint32_t current_time)
     if (time_diff == 0) return 0;
     
     // Calculate velocity in pulses per second
-    int32_t velocity_pulses_per_sec = (enc_data->pulse_count * 1000) / time_diff;
-    
-    // Convert from pulses per second to degrees per second
-    // Formula: (pulses/sec) * (360 degrees/rev) / (pulses/rev) = degrees/sec
-    // Using integer arithmetic: (velocity_pulses_per_sec * 360) / ENCODER_PULSES_PER_REV
-    int32_t velocity_degrees_per_sec = (velocity_pulses_per_sec * 360) / ENCODER_PULSES_PER_REV;
+    int32_t velocity = (enc_data->pulse_count * 1000) / time_diff;
     
     // Apply direction sign
     if (enc_data->direction == 2) { // Reverse
-        velocity_degrees_per_sec = -velocity_degrees_per_sec;
+        velocity = -velocity;
     }
     
-    return velocity_degrees_per_sec;
+    return velocity;
 }
 
 void apply_velocity_smoothing(encoder_data_t* enc_data)
@@ -252,6 +256,7 @@ void encoder_task(void *arg)
         
         // Send encoder 1 data over CAN
         uint8_t enc1_data[6];
+		if (encoder1_data.smoothed_velocity <0) encoder1_data.smoothed_velocity = encoder1_data.smoothed_velocity * (-1);
         enc1_data[0] = (uint8_t)(encoder1_data.direction & 0xFF);
         enc1_data[1] = (uint8_t)(encoder1_data.smoothed_velocity & 0xFF);
         enc1_data[2] = (uint8_t)((encoder1_data.smoothed_velocity >> 8) & 0xFF);
@@ -270,6 +275,9 @@ void encoder_task(void *arg)
         // Send encoder 2 data over CAN (only if available)
         if (ENCODER2_AVAILABLE) {
             uint8_t enc2_data[6];
+			if (encoder2_data.smoothed_velocity <0){
+				 encoder2_data.smoothed_velocity = encoder2_data.smoothed_velocity * (-1);
+			}
             enc2_data[0] = (uint8_t)(encoder2_data.direction & 0xFF);
             enc2_data[1] = (uint8_t)(encoder2_data.smoothed_velocity & 0xFF);
             enc2_data[2] = (uint8_t)((encoder2_data.smoothed_velocity >> 8) & 0xFF);
