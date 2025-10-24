@@ -114,9 +114,7 @@ bool encoder_tc_channel_init(uint32_t channel)
                       TC_BMR_POSEN |                   // Enable position counting
                       TC_BMR_SPEEDEN |                 // Enable speed counting
                       TC_BMR_FILTER |                  // Enable glitch filter
-                      TC_BMR_MAXFILT(TC_QUADRATURE_FILTER) | // Set filter value
-                      TC_BMR_TC0XC0S_TIOA0 |           // Connect TIOA0 to XC0 for encoder 1
-                      TC_BMR_TC1XC1S_TIOA1;            // Connect TIOA1 to XC1 for encoder 2
+                      TC_BMR_MAXFILT(TC_QUADRATURE_FILTER); // Set filter value
     }
     
     // Configure channel mode register for quadrature decoder
