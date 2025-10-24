@@ -36,9 +36,9 @@ typedef struct {
 // Quadrature filter value (0-15, higher = more filtering)
 #define TC_QUADRATURE_FILTER          3
 
-// CAN message IDs for encoder data
-#define CAN_ID_ENCODER1_DIR_VEL       0x100
-#define CAN_ID_ENCODER2_DIR_VEL       0x101
+// CAN message IDs for encoder data (matching can_app.h)
+#define CAN_ID_ENCODER1_DIR_VEL       0x130
+#define CAN_ID_ENCODER2_DIR_VEL       0x131
 
 // Function prototypes
 bool encoder_init(void);
@@ -50,7 +50,6 @@ bool is_direction_change_allowed(encoder_data_t* enc_data, uint32_t current_time
 
 // TC-specific functions
 bool encoder_tc_init(void);
-bool encoder_tc_channel_init(uint32_t channel);
 uint32_t encoder_tc_get_position(uint32_t channel);
 void encoder_tc_reset_position(uint32_t channel);
 uint8_t encoder_tc_get_direction(uint32_t channel);
