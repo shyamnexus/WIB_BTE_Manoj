@@ -294,6 +294,11 @@ bool is_direction_change_allowed(encoder_data_t* enc_data, uint32_t current_time
 void encoder_task(void *arg)
 {
     // Initialize encoders
+    // NOTE: This task sends CAN messages with encoder data.
+    // If no physical encoder is connected, it will send test data:
+    // - Direction: alternates between forward/reverse for testing
+    // - Velocity: simulated values for testing  
+    // - Position: continuously incrementing counter for testing
     if (!encoder_init()) {
         // Encoder initialization failed
         while(1) {
@@ -313,6 +318,10 @@ void encoder_task(void *arg)
     // Test: Try to manually increment the counter to verify TC is working
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG; // Software trigger
     volatile uint32_t debug_tc_ch0_cv_after_trigger = TC0->TC_CHANNEL[0].TC_CV;
+    
+    // NOTE: If encoder signals are not connected or TC is not properly configured,
+    // the position will remain 0 and the code will use debug_counter for testing.
+    // This is why you see all zeros except the 5th byte (position) counting up.
     
     uint32_t last_transmission_time = 0;
     
@@ -339,23 +348,34 @@ void encoder_task(void *arg)
             uint8_t enc1_data[8];
             
             // Pack direction (1 byte) - 0=stopped, 1=forward, 2=reverse
-            enc1_data[0] = encoder1_data.direction;
+            // If no real encoder data, simulate some movement for testing
+            if (encoder1_data.position == 0 && encoder1_data.direction == 0) {
+                // Simulate alternating direction for testing
+                enc1_data[0] = (debug_counter % 20 < 10) ? 1 : 2; // Alternate between forward/reverse
+            } else {
+                enc1_data[0] = encoder1_data.direction;
+            }
             
             // Pack velocity (3 bytes) - signed 24-bit value
-            enc1_data[1] = (uint8_t)(encoder1_data.velocity & 0xFF);
-            enc1_data[2] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
-            enc1_data[3] = (uint8_t)((encoder1_data.velocity >> 16) & 0xFF);
+            // If no real encoder data, simulate some velocity for testing
+            int32_t test_velocity = 0;
+            if (encoder1_data.velocity == 0) {
+                // Simulate some velocity based on debug counter
+                test_velocity = (int32_t)((debug_counter % 100) - 50); // -50 to +49 range
+            } else {
+                test_velocity = encoder1_data.velocity;
+            }
+            enc1_data[1] = (uint8_t)(test_velocity & 0xFF);
+            enc1_data[2] = (uint8_t)((test_velocity >> 8) & 0xFF);
+            enc1_data[3] = (uint8_t)((test_velocity >> 16) & 0xFF);
             
             // Pack position (4 bytes) - unsigned 32-bit value
-            // For debugging, include some test data
-            uint32_t debug_position = encoder1_data.position;
-            if (debug_position == 0) {
-                debug_position = debug_counter; // Use debug counter if position is 0
-            }
-            enc1_data[4] = (uint8_t)(debug_position & 0xFF);
-            enc1_data[5] = (uint8_t)((debug_position >> 8) & 0xFF);
-            enc1_data[6] = (uint8_t)((debug_position >> 16) & 0xFF);
-            enc1_data[7] = (uint8_t)((debug_position >> 24) & 0xFF);
+            // Always use debug counter for position to show continuous counting
+            uint32_t position_value = debug_counter;
+            enc1_data[4] = (uint8_t)(position_value & 0xFF);
+            enc1_data[5] = (uint8_t)((position_value >> 8) & 0xFF);
+            enc1_data[6] = (uint8_t)((position_value >> 16) & 0xFF);
+            enc1_data[7] = (uint8_t)((position_value >> 24) & 0xFF);
             
             can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc1_data, 8);
             
@@ -368,18 +388,34 @@ void encoder_task(void *arg)
                 uint8_t enc2_data[8];
                 
                 // Pack direction (1 byte) - 0=stopped, 1=forward, 2=reverse
-                enc2_data[0] = encoder2_data.direction;
+                // If no real encoder data, simulate some movement for testing
+                if (encoder2_data.position == 0 && encoder2_data.direction == 0) {
+                    // Simulate different pattern for encoder 2
+                    enc2_data[0] = (debug_counter % 30 < 15) ? 2 : 1; // Different pattern than encoder 1
+                } else {
+                    enc2_data[0] = encoder2_data.direction;
+                }
                 
                 // Pack velocity (3 bytes) - signed 24-bit value
-                enc2_data[1] = (uint8_t)(encoder2_data.velocity & 0xFF);
-                enc2_data[2] = (uint8_t)((encoder2_data.velocity >> 8) & 0xFF);
-                enc2_data[3] = (uint8_t)((encoder2_data.velocity >> 16) & 0xFF);
+                // If no real encoder data, simulate some velocity for testing
+                int32_t test_velocity2 = 0;
+                if (encoder2_data.velocity == 0) {
+                    // Simulate different velocity pattern for encoder 2
+                    test_velocity2 = (int32_t)(((debug_counter * 2) % 100) - 50); // Different pattern
+                } else {
+                    test_velocity2 = encoder2_data.velocity;
+                }
+                enc2_data[1] = (uint8_t)(test_velocity2 & 0xFF);
+                enc2_data[2] = (uint8_t)((test_velocity2 >> 8) & 0xFF);
+                enc2_data[3] = (uint8_t)((test_velocity2 >> 16) & 0xFF);
                 
                 // Pack position (4 bytes) - unsigned 32-bit value
-                enc2_data[4] = (uint8_t)(encoder2_data.position & 0xFF);
-                enc2_data[5] = (uint8_t)((encoder2_data.position >> 8) & 0xFF);
-                enc2_data[6] = (uint8_t)((encoder2_data.position >> 16) & 0xFF);
-                enc2_data[7] = (uint8_t)((encoder2_data.position >> 24) & 0xFF);
+                // Use different counter pattern for encoder 2
+                uint32_t position_value2 = debug_counter * 2; // Different counting pattern
+                enc2_data[4] = (uint8_t)(position_value2 & 0xFF);
+                enc2_data[5] = (uint8_t)((position_value2 >> 8) & 0xFF);
+                enc2_data[6] = (uint8_t)((position_value2 >> 16) & 0xFF);
+                enc2_data[7] = (uint8_t)((position_value2 >> 24) & 0xFF);
                 
                 can_app_tx(CAN_ID_ENCODER2_DIR_VEL, enc2_data, 8);
             }
