@@ -11,6 +11,7 @@ void task_accelerometer(void *arg); // Task that reads LIS2 over I2C and transmi
 void task_accelerometer_temperature(void *arg); // Combined task that reads both accelerometer and temperature from LIS2DH
 void task_tooltype(void *arg); // Task that samples tool type GPIO and transmits
 void encoder_task(void *arg); // Task that polls encoders and transmits direction/velocity over CAN
+void task_encoder1_pin_monitor(void *arg); // Task that monitors encoder 1 pins and sends state over CAN
 
 void create_application_tasks(void); // Creates all application tasks and required primitives
 
