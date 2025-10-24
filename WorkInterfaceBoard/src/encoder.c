@@ -78,66 +78,98 @@ bool encoder_tc_init(void)
     // Enable TC0 peripheral clock
     pmc_enable_periph_clk(ID_TC0);
     
-    // Initialize TC0 channel 0 for ENC1
-    if (!encoder_tc_channel_init(TC_QUADRATURE_CHANNEL_ENC1)) {
-        return false;
+    // Configure PIO for TC TIOA and TIOB pins (matching pinconfig_workhead_interface_pinconfig.csv)
+    // Configure PA5 as TIOA0 and PA1 as TIOB0 for encoder 1
+    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA5, PIO_DEFAULT);  // TIOA0 (pin 52)
+    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1, PIO_DEFAULT);  // TIOB0 (pin 70)
+    
+    if (ENCODER2_AVAILABLE) {
+        // Configure PA15 as TIOA1 and PA16 as TIOB1 for encoder 2
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA15, PIO_DEFAULT); // TIOA1 (pin 33)
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA16, PIO_DEFAULT); // TIOB1 (pin 30)
     }
+    
+    // Add small delay after pin configuration
+    delay_ms(10);
+    
+    // Set up Block Mode Register for quadrature decoding
+    uint32_t block_mode = TC_BMR_QDEN |                    // Enable quadrature decoder
+                         TC_BMR_POSEN |                   // Enable position counting
+                         TC_BMR_SPEEDEN |                 // Enable speed counting
+                         TC_BMR_FILTER |                  // Enable glitch filter
+                         TC_BMR_MAXFILT(TC_QUADRATURE_FILTER); // Set filter value
+    
+    tc_set_block_mode(TC0, block_mode);
+    
+    // Add delay after setting block mode
+    delay_ms(10);
+    
+    // For debugging: Try to use timer mode instead of quadrature mode
+    // This will help us determine if the issue is with quadrature decoding or basic TC functionality
+    // Comment out the quadrature-specific configuration for now
+    /*
+    // Initialize TC0 channel 0 for ENC1 (external clock mode for quadrature)
+    // For quadrature decoding, we need capture mode with external clock
+    tc_init(TC0, TC_QUADRATURE_CHANNEL_ENC1, TC_CMR_TCCLKS_XC0 | TC_CMR_BURST_NONE | 
+            TC_CMR_LDRA_RISING | TC_CMR_LDRB_FALLING);
     
     // Initialize TC0 channel 1 for ENC2 if available
     if (ENCODER2_AVAILABLE) {
-        if (!encoder_tc_channel_init(TC_QUADRATURE_CHANNEL_ENC2)) {
-            return false;
-        }
+        tc_init(TC0, TC_QUADRATURE_CHANNEL_ENC2, TC_CMR_TCCLKS_XC1 | TC_CMR_BURST_NONE |
+                TC_CMR_LDRA_RISING | TC_CMR_LDRB_FALLING);
+    }
+    
+    // Additional configuration for quadrature decoding
+    // Set up the TC channels for quadrature decoding mode
+    // This might be needed in addition to the tc_init call
+    TC0->TC_CHANNEL[TC_QUADRATURE_CHANNEL_ENC1].TC_CMR |= TC_CMR_CPCTRG; // Enable RC compare trigger
+    if (ENCODER2_AVAILABLE) {
+        TC0->TC_CHANNEL[TC_QUADRATURE_CHANNEL_ENC2].TC_CMR |= TC_CMR_CPCTRG; // Enable RC compare trigger
+    }
+    */
+    
+    // For debugging: Use timer mode instead of quadrature mode
+    // This will help us determine if the issue is with quadrature decoding or basic TC functionality
+    tc_init(TC0, TC_QUADRATURE_CHANNEL_ENC1, TC_CMR_TCCLKS_TIMER_CLOCK1 | TC_CMR_BURST_NONE);
+    if (ENCODER2_AVAILABLE) {
+        tc_init(TC0, TC_QUADRATURE_CHANNEL_ENC2, TC_CMR_TCCLKS_TIMER_CLOCK1 | TC_CMR_BURST_NONE);
+    }
+    
+    // Initialize TC0 channel 0 for ENC1 (external clock mode for quadrature)
+    // For quadrature decoding, we need capture mode with external clock
+    tc_init(TC0, TC_QUADRATURE_CHANNEL_ENC1, TC_CMR_TCCLKS_XC0 | TC_CMR_BURST_NONE | 
+            TC_CMR_LDRA_RISING | TC_CMR_LDRB_FALLING);
+    
+    // Initialize TC0 channel 1 for ENC2 if available
+    if (ENCODER2_AVAILABLE) {
+        tc_init(TC0, TC_QUADRATURE_CHANNEL_ENC2, TC_CMR_TCCLKS_XC1 | TC_CMR_BURST_NONE |
+                TC_CMR_LDRA_RISING | TC_CMR_LDRB_FALLING);
+    }
+    
+    // Additional configuration for quadrature decoding
+    // Set up the TC channels for quadrature decoding mode
+    // This might be needed in addition to the tc_init call
+    TC0->TC_CHANNEL[TC_QUADRATURE_CHANNEL_ENC1].TC_CMR |= TC_CMR_CPCTRG; // Enable RC compare trigger
+    if (ENCODER2_AVAILABLE) {
+        TC0->TC_CHANNEL[TC_QUADRATURE_CHANNEL_ENC2].TC_CMR |= TC_CMR_CPCTRG; // Enable RC compare trigger
+    }
+    
+    // Add delay after channel initialization
+    delay_ms(10);
+    
+    // Enable the channels with proper sequencing
+    // Enable channel 0 first
+    TC0->TC_CHANNEL[TC_QUADRATURE_CHANNEL_ENC1].TC_CCR = TC_CCR_CLKEN | TC_CCR_SWTRG;
+    delay_ms(10); // Small delay between channel enables
+    
+    if (ENCODER2_AVAILABLE) {
+        TC0->TC_CHANNEL[TC_QUADRATURE_CHANNEL_ENC2].TC_CCR = TC_CCR_CLKEN | TC_CCR_SWTRG;
+        delay_ms(10); // Small delay after enabling
     }
     
     return true;
 }
 
-// TC channel initialization
-bool encoder_tc_channel_init(uint32_t channel)
-{
-    // Configure PIO for TC TIOA and TIOB pins (matching pinconfig_workhead_interface_pinconfig.csv)
-    if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
-        // Configure PA5 as TIOA0 and PA1 as TIOB0
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA5, PIO_DEFAULT);  // TIOA0 (pin 52)
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1, PIO_DEFAULT);  // TIOB0 (pin 70)
-    } else if (channel == TC_QUADRATURE_CHANNEL_ENC2) {
-        // Configure PA15 as TIOA1 and PA16 as TIOB1
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA15, PIO_DEFAULT); // TIOA1 (pin 33)
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA16, PIO_DEFAULT); // TIOB1 (pin 30)
-    } else {
-        return false;
-    }
-    
-    // Configure TC for quadrature decoder mode
-    // Set up Block Mode Register for quadrature decoding (only once, not per channel)
-    if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
-        TC0->TC_BMR = TC_BMR_QDEN |                    // Enable quadrature decoder
-                      TC_BMR_POSEN |                   // Enable position counting
-                      TC_BMR_SPEEDEN |                 // Enable speed counting
-                      TC_BMR_FILTER |                  // Enable glitch filter
-                      TC_BMR_MAXFILT(TC_QUADRATURE_FILTER); // Set filter value
-    }
-    
-    // Configure channel mode register for quadrature decoder
-    // For SAM4E TC quadrature decoder, use external clock mode with proper configuration
-    if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
-        TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC0 |  // Use XC0 clock (TIOA0)
-                                      TC_CMR_BURST_NONE |       // No external gating
-                                      TC_CMR_LDRA_RISING |      // Load on rising edge
-                                      TC_CMR_LDRB_FALLING;      // Load on falling edge
-    } else if (channel == TC_QUADRATURE_CHANNEL_ENC2) {
-        TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC1 |  // Use XC1 clock (TIOA1)
-                                      TC_CMR_BURST_NONE |       // No external gating
-                                      TC_CMR_LDRA_RISING |      // Load on rising edge
-                                      TC_CMR_LDRB_FALLING;      // Load on falling edge
-    }
-    
-    // Enable the channel
-    TC0->TC_CHANNEL[channel].TC_CCR = TC_CCR_CLKEN | TC_CCR_SWTRG;
-    
-    return true;
-}
 
 // Get current position from TC counter
 uint32_t encoder_tc_get_position(uint32_t channel)
@@ -181,6 +213,12 @@ void encoder_poll(encoder_data_t* enc_data)
     
     // Read current position from TC counter
     uint32_t current_position = encoder_tc_get_position(enc_data->tc_channel);
+    
+    // Debug: Use a simple counter instead of TC position for testing
+    // This will help us determine if the issue is with TC counting or CAN transmission
+    static uint32_t test_counter = 0;
+    test_counter++;
+    current_position = test_counter; // Use simple counter for testing
     
     // Check for position change
     if (current_position != enc_data->last_position) {
@@ -333,6 +371,10 @@ void encoder_task(void *arg)
             enc1_data[5] = (uint8_t)((position_value >> 8) & 0xFF);
             enc1_data[6] = (uint8_t)((position_value >> 16) & 0xFF);
             enc1_data[7] = (uint8_t)((position_value >> 24) & 0xFF);
+            
+            // Debug: Add diagnostic information
+            static uint8_t debug_counter = 0;
+            enc1_data[0] = debug_counter++; // Incrementing counter to verify transmission
             
             can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc1_data, 8);
             
