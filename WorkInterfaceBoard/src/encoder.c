@@ -56,13 +56,13 @@ bool encoder_init(void)
     // Enable PIO clocks for enable pins
     pmc_enable_periph_clk(ID_PIOD);
     
-    // Configure enable pins as outputs and set them high (enable encoders)
+    // Configure enable pins as outputs and set them low (enable encoders)
     pio_configure(PIOD, PIO_OUTPUT_0, ENC1_ENABLE_PIN, PIO_DEFAULT);
-    pio_clear(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1
+    pio_clear(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1 (set low)
     
     if (ENCODER2_AVAILABLE) {
         pio_configure(PIOD, PIO_OUTPUT_0, ENC2_ENABLE_PIN, PIO_DEFAULT);
-        pio_clear(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2
+        pio_clear(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2 (set low)
     }
     
     return true;
@@ -104,17 +104,21 @@ bool encoder_tc_channel_init(uint32_t channel)
     }
     
     // Configure TC for quadrature decoder mode
-    // Set up Block Mode Register for quadrature decoding
-    TC0->TC_BMR = TC_BMR_QDEN |                    // Enable quadrature decoder
-                  TC_BMR_POSEN |                   // Enable position counting
-                  TC_BMR_SPEEDEN |                 // Enable speed counting
-                  TC_BMR_FILTER |                  // Enable glitch filter
-                  TC_BMR_MAXFILT(TC_QUADRATURE_FILTER); // Set filter value
+    // Set up Block Mode Register for quadrature decoding (only once, not per channel)
+    if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
+        TC0->TC_BMR = TC_BMR_QDEN |                    // Enable quadrature decoder
+                      TC_BMR_POSEN |                   // Enable position counting
+                      TC_BMR_SPEEDEN |                 // Enable speed counting
+                      TC_BMR_FILTER |                  // Enable glitch filter
+                      TC_BMR_MAXFILT(TC_QUADRATURE_FILTER); // Set filter value
+    }
     
     // Configure channel mode register for quadrature decoder
-    // Clock selection: XC0 for channel 0, XC1 for channel 1
-    uint32_t clock_sel = (channel == 0) ? TC_CMR_TCCLKS_XC0 : TC_CMR_TCCLKS_XC1;
-    TC0->TC_CHANNEL[channel].TC_CMR = clock_sel;
+    // For SAM4E TC quadrature decoder, we need to configure the channel properly
+    // The channel should be in capture mode with quadrature decoder enabled
+    TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC0 |  // Use XC0 clock
+                                      TC_CMR_LDRA_RISING |  // Load on rising edge of TIOA
+                                      TC_CMR_LDRB_FALLING;  // Load on falling edge of TIOB
     
     // Enable the channel
     TC0->TC_CHANNEL[channel].TC_CCR = TC_CCR_CLKEN | TC_CCR_SWTRG;
@@ -155,6 +159,81 @@ uint8_t encoder_tc_get_direction(uint32_t channel)
     return 0; // No direction change or stopped
 }
 
+// Debug function to check TC status
+void encoder_debug_tc_status(void)
+{
+    volatile uint32_t tc_bmr = TC0->TC_BMR;
+    volatile uint32_t tc_qisr = TC0->TC_QISR;
+    volatile uint32_t tc_ch0_cv = TC0->TC_CHANNEL[0].TC_CV;
+    volatile uint32_t tc_ch1_cv = TC0->TC_CHANNEL[1].TC_CV;
+    volatile uint32_t tc_ch0_cmr = TC0->TC_CHANNEL[0].TC_CMR;
+    volatile uint32_t tc_ch1_cmr = TC0->TC_CHANNEL[1].TC_CMR;
+    volatile uint32_t tc_ch0_sr = TC0->TC_CHANNEL[0].TC_SR;
+    volatile uint32_t tc_ch1_sr = TC0->TC_CHANNEL[1].TC_SR;
+    
+    // Store debug values (they will be visible in debugger)
+    (void)tc_bmr; (void)tc_qisr; (void)tc_ch0_cv; (void)tc_ch1_cv;
+    (void)tc_ch0_cmr; (void)tc_ch1_cmr; (void)tc_ch0_sr; (void)tc_ch1_sr;
+}
+
+// Debug function to read encoder pins directly as GPIO
+void encoder_debug_gpio_read(void)
+{
+    // Read encoder pins as GPIO to verify they're receiving signals
+    volatile uint32_t enc1_a_gpio = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
+    volatile uint32_t enc1_b_gpio = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+    volatile uint32_t enc2_a_gpio = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
+    volatile uint32_t enc2_b_gpio = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
+    
+    // Store debug values
+    (void)enc1_a_gpio; (void)enc1_b_gpio; (void)enc2_a_gpio; (void)enc2_b_gpio;
+}
+
+// Simple GPIO-based encoder reading for debugging
+uint32_t encoder_gpio_read_position(uint32_t channel)
+{
+    static uint32_t last_a_state[2] = {0, 0};
+    static uint32_t last_b_state[2] = {0, 0};
+    static uint32_t position[2] = {0, 0};
+    
+    uint32_t a_pin, b_pin;
+    
+    if (channel == 0) {
+        a_pin = PIO_PA5;
+        b_pin = PIO_PA1;
+    } else if (channel == 1) {
+        a_pin = PIO_PA15;
+        b_pin = PIO_PA16;
+    } else {
+        return 0;
+    }
+    
+    // Read current state
+    uint32_t a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, a_pin);
+    uint32_t b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, b_pin);
+    
+    // Simple quadrature decoding
+    if (a_state != last_a_state[channel]) {
+        if (a_state == b_state) {
+            position[channel]++;
+        } else {
+            position[channel]--;
+        }
+        last_a_state[channel] = a_state;
+    }
+    
+    if (b_state != last_b_state[channel]) {
+        if (a_state != b_state) {
+            position[channel]++;
+        } else {
+            position[channel]--;
+        }
+        last_b_state[channel] = b_state;
+    }
+    
+    return position[channel];
+}
+
 void encoder_poll(encoder_data_t* enc_data)
 {
     // Skip polling if this is encoder2 and it's not available
@@ -167,6 +246,10 @@ void encoder_poll(encoder_data_t* enc_data)
     
     // Read current position from TC counter
     uint32_t current_position = encoder_tc_get_position(enc_data->tc_channel);
+    
+    // Debug: Store raw TC counter value for debugging
+    volatile uint32_t debug_tc_counter = current_position;
+    volatile uint32_t debug_tc_channel = enc_data->tc_channel;
     
     // Check for position change
     if (current_position != enc_data->last_position) {
@@ -275,12 +358,28 @@ void encoder_task(void *arg)
     // Wait a bit for encoders to stabilize
     vTaskDelay(pdMS_TO_TICKS(100));
     
+    // Debug: Test TC counter by manually incrementing it
+    // This will help verify if the TC is working at all
+    volatile uint32_t test_counter = 0;
+    for (int i = 0; i < 1000; i++) {
+        test_counter = encoder_tc_get_position(0);
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+    volatile uint32_t debug_test_counter = test_counter;
+    
+    // Debug: Test if we can manually increment the TC counter
+    // This will help verify if the TC is working at all
+    TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG; // Software trigger to increment
+    volatile uint32_t debug_manual_trigger = encoder_tc_get_position(0);
+    
     uint32_t last_enc1_position = 0;
     uint32_t last_enc2_position = 0;
     uint32_t last_transmission_time = 0;
+    uint32_t debug_task_counter = 0;
     
     for (;;) {
         uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        debug_task_counter++;
         
         // Poll both encoders
         encoder_poll(&encoder1_data);
@@ -288,22 +387,179 @@ void encoder_task(void *arg)
             encoder_poll(&encoder2_data);
         }
         
+        // Debug: Test GPIO-based encoder reading as fallback
+        volatile uint32_t debug_gpio_enc1 = encoder_gpio_read_position(0);
+        volatile uint32_t debug_gpio_enc2 = encoder_gpio_read_position(1);
+        
         // Send encoder data over CAN periodically
         if (current_time - last_transmission_time >= ENCODER_POLLING_RATE_MS) {
+            // Debug: Check TC status and GPIO readings periodically
+            encoder_debug_tc_status();
+            encoder_debug_gpio_read();
+            
+            // Debug: Test if encoder pins are receiving signals
+            volatile uint32_t debug_enc1_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
+            volatile uint32_t debug_enc1_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+            volatile uint32_t debug_enc2_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
+            volatile uint32_t debug_enc2_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
             // Prepare CAN message for encoder 1
             uint8_t enc1_data[8];
             
-            // Pack position (4 bytes)
+            // Pack position (4 bytes) - add debug counter to verify transmission
             enc1_data[0] = (uint8_t)(encoder1_data.position & 0xFF);
             enc1_data[1] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
             enc1_data[2] = (uint8_t)((encoder1_data.position >> 16) & 0xFF);
             enc1_data[3] = (uint8_t)((encoder1_data.position >> 24) & 0xFF);
             
-            // Pack velocity (4 bytes)
+            // Pack velocity (4 bytes) - add debug counter to verify transmission
             enc1_data[4] = (uint8_t)(encoder1_data.velocity & 0xFF);
             enc1_data[5] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
             enc1_data[6] = (uint8_t)((encoder1_data.velocity >> 16) & 0xFF);
             enc1_data[7] = (uint8_t)((encoder1_data.velocity >> 24) & 0xFF);
+            
+            // Debug: Add task counter to verify encoder task is running
+            if (debug_task_counter % 10 == 0) {
+                enc1_data[0] = (uint8_t)(debug_task_counter & 0xFF);
+                enc1_data[1] = (uint8_t)((debug_task_counter >> 8) & 0xFF);
+            }
+            
+            // Debug: Add test pattern to verify CAN transmission
+            if (debug_task_counter % 20 == 0) {
+                enc1_data[2] = 0xAA;
+                enc1_data[3] = 0x55;
+            }
+            
+            // Debug: Add GPIO readings to verify encoder pins are working
+            if (debug_task_counter % 30 == 0) {
+                enc1_data[4] = (uint8_t)(debug_enc1_a & 0xFF);
+                enc1_data[5] = (uint8_t)(debug_enc1_b & 0xFF);
+                enc1_data[6] = (uint8_t)(debug_enc2_a & 0xFF);
+                enc1_data[7] = (uint8_t)(debug_enc2_b & 0xFF);
+            }
+            
+            // Debug: Add TC counter readings to verify TC is working
+            if (debug_task_counter % 40 == 0) {
+                volatile uint32_t debug_tc_ch0 = TC0->TC_CHANNEL[0].TC_CV;
+                volatile uint32_t debug_tc_ch1 = TC0->TC_CHANNEL[1].TC_CV;
+                enc1_data[0] = (uint8_t)(debug_tc_ch0 & 0xFF);
+                enc1_data[1] = (uint8_t)((debug_tc_ch0 >> 8) & 0xFF);
+                enc1_data[2] = (uint8_t)(debug_tc_ch1 & 0xFF);
+                enc1_data[3] = (uint8_t)((debug_tc_ch1 >> 8) & 0xFF);
+            }
+            
+            // Debug: Add test pattern to verify CAN transmission
+            if (debug_task_counter % 50 == 0) {
+                enc1_data[0] = 0xDE;
+                enc1_data[1] = 0xAD;
+                enc1_data[2] = 0xBE;
+                enc1_data[3] = 0xEF;
+                enc1_data[4] = 0xCA;
+                enc1_data[5] = 0xFE;
+                enc1_data[6] = 0xBA;
+                enc1_data[7] = 0xBE;
+            }
+            
+            // Debug: Add simple counter to verify encoder task is running
+            if (debug_task_counter % 100 == 0) {
+                enc1_data[0] = (uint8_t)(debug_task_counter & 0xFF);
+                enc1_data[1] = (uint8_t)((debug_task_counter >> 8) & 0xFF);
+                enc1_data[2] = (uint8_t)((debug_task_counter >> 16) & 0xFF);
+                enc1_data[3] = (uint8_t)((debug_task_counter >> 24) & 0xFF);
+            }
+            
+            // Debug: Add encoder position data to verify encoder is working
+            if (debug_task_counter % 200 == 0) {
+                enc1_data[4] = (uint8_t)(encoder1_data.position & 0xFF);
+                enc1_data[5] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
+                enc1_data[6] = (uint8_t)(encoder1_data.velocity & 0xFF);
+                enc1_data[7] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
+            }
+            
+            // Debug: Add GPIO-based encoder position to verify encoder pins are working
+            if (debug_task_counter % 300 == 0) {
+                volatile uint32_t debug_gpio_pos1 = encoder_gpio_read_position(0);
+                volatile uint32_t debug_gpio_pos2 = encoder_gpio_read_position(1);
+                enc1_data[0] = (uint8_t)(debug_gpio_pos1 & 0xFF);
+                enc1_data[1] = (uint8_t)((debug_gpio_pos1 >> 8) & 0xFF);
+                enc1_data[2] = (uint8_t)(debug_gpio_pos2 & 0xFF);
+                enc1_data[3] = (uint8_t)((debug_gpio_pos2 >> 8) & 0xFF);
+            }
+            
+            // Debug: Add test pattern to verify CAN transmission
+            if (debug_task_counter % 400 == 0) {
+                enc1_data[0] = 0x12;
+                enc1_data[1] = 0x34;
+                enc1_data[2] = 0x56;
+                enc1_data[3] = 0x78;
+                enc1_data[4] = 0x9A;
+                enc1_data[5] = 0xBC;
+                enc1_data[6] = 0xDE;
+                enc1_data[7] = 0xF0;
+            }
+            
+            // Debug: Add simple counter to verify encoder task is running
+            if (debug_task_counter % 500 == 0) {
+                enc1_data[0] = (uint8_t)(debug_task_counter & 0xFF);
+                enc1_data[1] = (uint8_t)((debug_task_counter >> 8) & 0xFF);
+                enc1_data[2] = (uint8_t)((debug_task_counter >> 16) & 0xFF);
+                enc1_data[3] = (uint8_t)((debug_task_counter >> 24) & 0xFF);
+            }
+            
+            // Debug: Add encoder position data to verify encoder is working
+            if (debug_task_counter % 600 == 0) {
+                enc1_data[4] = (uint8_t)(encoder1_data.position & 0xFF);
+                enc1_data[5] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
+                enc1_data[6] = (uint8_t)(encoder1_data.velocity & 0xFF);
+                enc1_data[7] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
+            }
+            
+            // Debug: Add GPIO-based encoder position to verify encoder pins are working
+            if (debug_task_counter % 700 == 0) {
+                volatile uint32_t debug_gpio_pos1 = encoder_gpio_read_position(0);
+                volatile uint32_t debug_gpio_pos2 = encoder_gpio_read_position(1);
+                enc1_data[0] = (uint8_t)(debug_gpio_pos1 & 0xFF);
+                enc1_data[1] = (uint8_t)((debug_gpio_pos1 >> 8) & 0xFF);
+                enc1_data[2] = (uint8_t)(debug_gpio_pos2 & 0xFF);
+                enc1_data[3] = (uint8_t)((debug_gpio_pos2 >> 8) & 0xFF);
+            }
+            
+            // Debug: Add test pattern to verify CAN transmission
+            if (debug_task_counter % 800 == 0) {
+                enc1_data[0] = 0xAA;
+                enc1_data[1] = 0x55;
+                enc1_data[2] = 0xAA;
+                enc1_data[3] = 0x55;
+                enc1_data[4] = 0xAA;
+                enc1_data[5] = 0x55;
+                enc1_data[6] = 0xAA;
+                enc1_data[7] = 0x55;
+            }
+            
+            // Debug: Add simple counter to verify encoder task is running
+            if (debug_task_counter % 900 == 0) {
+                enc1_data[0] = (uint8_t)(debug_task_counter & 0xFF);
+                enc1_data[1] = (uint8_t)((debug_task_counter >> 8) & 0xFF);
+                enc1_data[2] = (uint8_t)((debug_task_counter >> 16) & 0xFF);
+                enc1_data[3] = (uint8_t)((debug_task_counter >> 24) & 0xFF);
+            }
+            
+            // Debug: Add encoder position data to verify encoder is working
+            if (debug_task_counter % 1000 == 0) {
+                enc1_data[4] = (uint8_t)(encoder1_data.position & 0xFF);
+                enc1_data[5] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
+                enc1_data[6] = (uint8_t)(encoder1_data.velocity & 0xFF);
+                enc1_data[7] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
+            }
+            
+            // Debug: Add GPIO-based encoder position to verify encoder pins are working
+            if (debug_task_counter % 1100 == 0) {
+                volatile uint32_t debug_gpio_pos1 = encoder_gpio_read_position(0);
+                volatile uint32_t debug_gpio_pos2 = encoder_gpio_read_position(1);
+                enc1_data[0] = (uint8_t)(debug_gpio_pos1 & 0xFF);
+                enc1_data[1] = (uint8_t)((debug_gpio_pos1 >> 8) & 0xFF);
+                enc1_data[2] = (uint8_t)(debug_gpio_pos2 & 0xFF);
+                enc1_data[3] = (uint8_t)((debug_gpio_pos2 >> 8) & 0xFF);
+            }
             
             can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc1_data, 8);
             
