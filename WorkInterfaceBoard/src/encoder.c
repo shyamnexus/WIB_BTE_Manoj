@@ -8,6 +8,7 @@
 // Encoder data structures
 static encoder_data_t encoder1_data = {0};
 static encoder_data_t encoder2_data = {0};
+
 // Define TickType_t if not already defined
 #ifndef TickType_t
 typedef portTickType TickType_t;
@@ -19,6 +20,7 @@ typedef portTickType TickType_t;
 #ifndef pdMS_TO_TICKS
 #define pdMS_TO_TICKS(ms) ((TickType_t)((ms) / portTICK_RATE_MS)) // Convert ms to OS ticks
 #endif
+
 // Configuration constants
 #define ENCODER_POLLING_RATE_MS    50      // Polling rate in milliseconds
 #define VELOCITY_WINDOW_MS         100     // Velocity calculation window in milliseconds
@@ -118,7 +120,7 @@ bool encoder_tc_channel_init(uint32_t channel)
     }
     
     // Configure channel mode register for quadrature decoder
-    // For SAM4E TC quadrature decoder, use external clock from encoder signals
+    // For SAM4E TC quadrature decoder, use external clock mode with proper configuration
     if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
         TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC0 |  // Use XC0 clock (TIOA0)
                                       TC_CMR_BURST_NONE |       // No external gating
@@ -162,7 +164,8 @@ uint8_t encoder_tc_get_direction(uint32_t channel)
     if (channel >= 3) return 0; // Invalid channel
     
     // Read direction from TC QISR register
-    return (TC0->TC_QISR & TC_QISR_DIRCHG) ? 1 : 0;
+    // For quadrature decoder, check the direction bit for the specific channel
+    return (TC0->TC_QISR & (1 << (channel + 1))) ? 1 : 0;
 }
 
 // Poll encoder for position changes
@@ -281,11 +284,6 @@ bool is_direction_change_allowed(encoder_data_t* enc_data, uint32_t current_time
 void encoder_task(void *arg)
 {
     // Initialize encoders
-    // NOTE: This task sends CAN messages with encoder data.
-    // If no physical encoder is connected, it will send test data:
-    // - Direction: alternates between forward/reverse for testing
-    // - Velocity: simulated values for testing  
-    // - Position: continuously incrementing counter for testing
     if (!encoder_init()) {
         // Encoder initialization failed
         while(1) {

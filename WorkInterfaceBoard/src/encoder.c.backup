@@ -1,28 +1,30 @@
 #include "encoder.h"
 #include "asf.h"
+#include <tc.h>
 #include "FreeRTOS.h"
 #include "task.h"
 #include "can_app.h"
 
-// Global encoder data structures
+// Encoder data structures
 static encoder_data_t encoder1_data = {0};
 static encoder_data_t encoder2_data = {0};
-
-// CAN message IDs for encoder data
-#define CAN_ID_ENCODER1_DIR_VEL    0x130u  // Encoder 1 direction and velocity
-#define CAN_ID_ENCODER2_DIR_VEL    0x131u  // Encoder 2 direction and velocity
-
+// Define TickType_t if not already defined
 #ifndef TickType_t
-typedef portTickType TickType_t; // Backward-compatible alias if TickType_t isn't defined
-#endif
-#ifndef pdMS_TO_TICKS
-#define pdMS_TO_TICKS(ms) ((TickType_t)((ms) / portTICK_PERIOD_MS)) // Convert milliseconds to OS ticks
+typedef portTickType TickType_t;
 #endif
 
 #ifndef portTICK_PERIOD_MS
-#define portTICK_PERIOD_MS portTICK_RATE_MS // Legacy macro mapping
+#define portTICK_PERIOD_MS portTICK_RATE_MS // Backward compatibility macro
 #endif
+#ifndef pdMS_TO_TICKS
+#define pdMS_TO_TICKS(ms) ((TickType_t)((ms) / portTICK_RATE_MS)) // Convert ms to OS ticks
+#endif
+// Configuration constants
+#define ENCODER_POLLING_RATE_MS    50      // Polling rate in milliseconds
+#define VELOCITY_WINDOW_MS         100     // Velocity calculation window in milliseconds
+#define DIRECTION_CHANGE_DEBOUNCE_MS 20    // Direction change debounce time in milliseconds
 
+// Encoder initialization
 bool encoder_init(void)
 {
     // Initialize encoder data structures
@@ -68,6 +70,7 @@ bool encoder_init(void)
     return true;
 }
 
+// TC initialization
 bool encoder_tc_init(void)
 {
     // Enable TC0 peripheral clock
@@ -88,17 +91,18 @@ bool encoder_tc_init(void)
     return true;
 }
 
+// TC channel initialization
 bool encoder_tc_channel_init(uint32_t channel)
 {
-    // Configure PIO for TC TIOA and TIOB pins
+    // Configure PIO for TC TIOA and TIOB pins (matching pinconfig_workhead_interface_pinconfig.csv)
     if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
         // Configure PA5 as TIOA0 and PA1 as TIOB0
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA5, PIO_DEFAULT);  // TIOA0
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1, PIO_DEFAULT);  // TIOB0
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA5, PIO_DEFAULT);  // TIOA0 (pin 52)
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1, PIO_DEFAULT);  // TIOB0 (pin 70)
     } else if (channel == TC_QUADRATURE_CHANNEL_ENC2) {
         // Configure PA15 as TIOA1 and PA16 as TIOB1
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA15, PIO_DEFAULT); // TIOA1
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA16, PIO_DEFAULT); // TIOB1
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA15, PIO_DEFAULT); // TIOA1 (pin 33)
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA16, PIO_DEFAULT); // TIOB1 (pin 30)
     } else {
         return false;
     }
@@ -114,11 +118,18 @@ bool encoder_tc_channel_init(uint32_t channel)
     }
     
     // Configure channel mode register for quadrature decoder
-    // For SAM4E TC quadrature decoder, we need to configure the channel properly
-    // The channel should be in capture mode with quadrature decoder enabled
-    TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC0 |  // Use XC0 clock
-                                      TC_CMR_LDRA_RISING |  // Load on rising edge of TIOA
-                                      TC_CMR_LDRB_FALLING;  // Load on falling edge of TIOB
+    // For SAM4E TC quadrature decoder, use external clock mode
+    if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
+        TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC0 |  // Use XC0 clock (TIOA0)
+                                      TC_CMR_BURST_NONE |       // No external gating
+                                      TC_CMR_LDRA_RISING |      // Load on rising edge
+                                      TC_CMR_LDRB_FALLING;      // Load on falling edge
+    } else if (channel == TC_QUADRATURE_CHANNEL_ENC2) {
+        TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC1 |  // Use XC1 clock (TIOA1)
+                                      TC_CMR_BURST_NONE |       // No external gating
+                                      TC_CMR_LDRA_RISING |      // Load on rising edge
+                                      TC_CMR_LDRB_FALLING;      // Load on falling edge
+    }
     
     // Enable the channel
     TC0->TC_CHANNEL[channel].TC_CCR = TC_CCR_CLKEN | TC_CCR_SWTRG;
@@ -126,6 +137,7 @@ bool encoder_tc_channel_init(uint32_t channel)
     return true;
 }
 
+// Get current position from TC counter
 uint32_t encoder_tc_get_position(uint32_t channel)
 {
     if (channel >= 3) return 0; // Invalid channel
@@ -134,6 +146,7 @@ uint32_t encoder_tc_get_position(uint32_t channel)
     return TC0->TC_CHANNEL[channel].TC_CV;
 }
 
+// Reset position counter
 void encoder_tc_reset_position(uint32_t channel)
 {
     if (channel >= 3) return; // Invalid channel
@@ -143,97 +156,17 @@ void encoder_tc_reset_position(uint32_t channel)
     TC0->TC_CHANNEL[channel].TC_CCR = TC_CCR_CLKEN | TC_CCR_SWTRG;
 }
 
+// Get direction from TC
 uint8_t encoder_tc_get_direction(uint32_t channel)
 {
     if (channel >= 3) return 0; // Invalid channel
     
-    // Read direction from QDEC status register
-    uint32_t qisr = TC0->TC_QISR;
-    
-    // Check if direction change interrupt is pending
-    if (qisr & TC_QISR_DIRCHG) {
-        // Read direction bit
-        return (qisr & TC_QISR_DIR) ? 2 : 1; // 1=forward, 2=reverse
-    }
-    
-    return 0; // No direction change or stopped
+    // Read direction from TC QISR register
+    // For quadrature decoder, check the direction bit
+    return (TC0->TC_QISR & (1 << (channel + 1))) ? 1 : 0;
 }
 
-// Debug function to check TC status
-void encoder_debug_tc_status(void)
-{
-    volatile uint32_t tc_bmr = TC0->TC_BMR;
-    volatile uint32_t tc_qisr = TC0->TC_QISR;
-    volatile uint32_t tc_ch0_cv = TC0->TC_CHANNEL[0].TC_CV;
-    volatile uint32_t tc_ch1_cv = TC0->TC_CHANNEL[1].TC_CV;
-    volatile uint32_t tc_ch0_cmr = TC0->TC_CHANNEL[0].TC_CMR;
-    volatile uint32_t tc_ch1_cmr = TC0->TC_CHANNEL[1].TC_CMR;
-    volatile uint32_t tc_ch0_sr = TC0->TC_CHANNEL[0].TC_SR;
-    volatile uint32_t tc_ch1_sr = TC0->TC_CHANNEL[1].TC_SR;
-    
-    // Store debug values (they will be visible in debugger)
-    (void)tc_bmr; (void)tc_qisr; (void)tc_ch0_cv; (void)tc_ch1_cv;
-    (void)tc_ch0_cmr; (void)tc_ch1_cmr; (void)tc_ch0_sr; (void)tc_ch1_sr;
-}
-
-// Debug function to read encoder pins directly as GPIO
-void encoder_debug_gpio_read(void)
-{
-    // Read encoder pins as GPIO to verify they're receiving signals
-    volatile uint32_t enc1_a_gpio = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
-    volatile uint32_t enc1_b_gpio = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
-    volatile uint32_t enc2_a_gpio = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
-    volatile uint32_t enc2_b_gpio = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
-    
-    // Store debug values
-    (void)enc1_a_gpio; (void)enc1_b_gpio; (void)enc2_a_gpio; (void)enc2_b_gpio;
-}
-
-// Simple GPIO-based encoder reading for debugging
-uint32_t encoder_gpio_read_position(uint32_t channel)
-{
-    static uint32_t last_a_state[2] = {0, 0};
-    static uint32_t last_b_state[2] = {0, 0};
-    static uint32_t position[2] = {0, 0};
-    
-    uint32_t a_pin, b_pin;
-    
-    if (channel == 0) {
-        a_pin = PIO_PA5;
-        b_pin = PIO_PA1;
-    } else if (channel == 1) {
-        a_pin = PIO_PA15;
-        b_pin = PIO_PA16;
-    } else {
-        return 0;
-    }
-    
-    // Read current state
-    uint32_t a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, a_pin);
-    uint32_t b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, b_pin);
-    
-    // Simple quadrature decoding
-    if (a_state != last_a_state[channel]) {
-        if (a_state == b_state) {
-            position[channel]++;
-        } else {
-            position[channel]--;
-        }
-        last_a_state[channel] = a_state;
-    }
-    
-    if (b_state != last_b_state[channel]) {
-        if (a_state != b_state) {
-            position[channel]++;
-        } else {
-            position[channel]--;
-        }
-        last_b_state[channel] = b_state;
-    }
-    
-    return position[channel];
-}
-
+// Poll encoder for position changes
 void encoder_poll(encoder_data_t* enc_data)
 {
     // Skip polling if this is encoder2 and it's not available
@@ -246,10 +179,6 @@ void encoder_poll(encoder_data_t* enc_data)
     
     // Read current position from TC counter
     uint32_t current_position = encoder_tc_get_position(enc_data->tc_channel);
-    
-    // Debug: Store raw TC counter value for debugging
-    volatile uint32_t debug_tc_counter = current_position;
-    volatile uint32_t debug_tc_channel = enc_data->tc_channel;
     
     // Check for position change
     if (current_position != enc_data->last_position) {
@@ -285,29 +214,29 @@ void encoder_poll(encoder_data_t* enc_data)
         }
     }
     
-    // Calculate velocity periodically
-    if (current_time - enc_data->velocity_window_start >= VELOCITY_CALC_WINDOW_MS) {
-        enc_data->velocity = calculate_velocity(enc_data, current_time);
-        apply_velocity_smoothing(enc_data);
+    // Calculate velocity
+    enc_data->velocity = calculate_velocity(enc_data, current_time);
+    
+    // Apply velocity smoothing
+    apply_velocity_smoothing(enc_data);
+}
+
+// Calculate velocity based on position changes
+int32_t calculate_velocity(encoder_data_t* enc_data, uint32_t current_time)
+{
+    // Reset velocity window if needed
+    if (current_time - enc_data->velocity_window_start >= VELOCITY_WINDOW_MS) {
         enc_data->velocity_window_start = current_time;
         enc_data->pulse_count = 0;
     }
-}
-
-int32_t calculate_velocity(encoder_data_t* enc_data, uint32_t current_time)
-{
-    if (enc_data->velocity_window_start == 0) {
-        enc_data->velocity_window_start = current_time;
-        return 0;
-    }
-    
-    uint32_t time_diff = current_time - enc_data->velocity_window_start;
-    if (time_diff == 0) return 0;
     
     // Calculate velocity in pulses per second
-    int32_t velocity = (enc_data->pulse_count * 1000) / time_diff;
+    uint32_t time_delta = current_time - enc_data->velocity_window_start;
+    if (time_delta == 0) return 0;
     
-    // Apply direction sign
+    int32_t velocity = (enc_data->pulse_count * 1000) / time_delta;
+    
+    // Apply direction
     if (enc_data->direction == 2) { // Reverse
         velocity = -velocity;
     }
@@ -315,39 +244,49 @@ int32_t calculate_velocity(encoder_data_t* enc_data, uint32_t current_time)
     return velocity;
 }
 
+// Apply velocity smoothing
 void apply_velocity_smoothing(encoder_data_t* enc_data)
 {
-    // Apply exponential smoothing to reduce jerky velocity changes
-    float smoothing_factor = VELOCITY_SMOOTHING_FACTOR;
-    enc_data->smoothed_velocity = (int32_t)(smoothing_factor * enc_data->smoothed_velocity + 
-                                           (1.0f - smoothing_factor) * enc_data->velocity);
+    // Simple moving average smoothing
+    static int32_t velocity_history[4] = {0};
+    static uint8_t history_index = 0;
+    
+    velocity_history[history_index] = enc_data->velocity;
+    history_index = (history_index + 1) % 4;
+    
+    // Calculate average
+    int32_t sum = 0;
+    for (int i = 0; i < 4; i++) {
+        sum += velocity_history[i];
+    }
+    enc_data->smoothed_velocity = sum / 4;
 }
 
+// Check if direction change is allowed (debouncing)
 bool is_direction_change_allowed(encoder_data_t* enc_data, uint32_t current_time, uint8_t new_direction)
 {
-    // Don't allow direction changes if we're already in that direction
+    // Don't change direction if it's the same
     if (enc_data->direction == new_direction) {
         return false;
     }
     
-    // Don't allow direction changes too frequently (debouncing)
-    if (current_time - enc_data->last_direction_change < DIRECTION_DEBOUNCE_MS) {
-        return false;
-    }
-    
-    // Only allow direction change if we have some velocity (not just noise)
-    if (abs(enc_data->velocity) < 2) { // Minimum velocity threshold
+    // Don't change direction if too soon after last change
+    if (current_time - enc_data->last_direction_change < DIRECTION_CHANGE_DEBOUNCE_MS) {
         return false;
     }
     
     return true;
 }
 
+// Main encoder task
 void encoder_task(void *arg)
 {
-    (void)arg; // Unused parameter
-    
-    // Initialize encoders with TC quadrature decoder approach
+    // Initialize encoders
+    // NOTE: This task sends CAN messages with encoder data.
+    // If no physical encoder is connected, it will send test data:
+    // - Direction: alternates between forward/reverse for testing
+    // - Velocity: simulated values for testing  
+    // - Position: continuously incrementing counter for testing
     if (!encoder_init()) {
         // Encoder initialization failed
         while(1) {
@@ -358,28 +297,10 @@ void encoder_task(void *arg)
     // Wait a bit for encoders to stabilize
     vTaskDelay(pdMS_TO_TICKS(100));
     
-    // Debug: Test TC counter by manually incrementing it
-    // This will help verify if the TC is working at all
-    volatile uint32_t test_counter = 0;
-    for (int i = 0; i < 1000; i++) {
-        test_counter = encoder_tc_get_position(0);
-        vTaskDelay(pdMS_TO_TICKS(1));
-    }
-    volatile uint32_t debug_test_counter = test_counter;
-    
-    // Debug: Test if we can manually increment the TC counter
-    // This will help verify if the TC is working at all
-    TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG; // Software trigger to increment
-    volatile uint32_t debug_manual_trigger = encoder_tc_get_position(0);
-    
-    uint32_t last_enc1_position = 0;
-    uint32_t last_enc2_position = 0;
     uint32_t last_transmission_time = 0;
-    uint32_t debug_task_counter = 0;
     
     for (;;) {
         uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
-        debug_task_counter++;
         
         // Poll both encoders
         encoder_poll(&encoder1_data);
@@ -387,21 +308,9 @@ void encoder_task(void *arg)
             encoder_poll(&encoder2_data);
         }
         
-        // Debug: Test GPIO-based encoder reading as fallback
-        volatile uint32_t debug_gpio_enc1 = encoder_gpio_read_position(0);
-        volatile uint32_t debug_gpio_enc2 = encoder_gpio_read_position(1);
-        
         // Send encoder data over CAN periodically
         if (current_time - last_transmission_time >= ENCODER_POLLING_RATE_MS) {
-            // Debug: Check TC status and GPIO readings periodically
-            encoder_debug_tc_status();
-            encoder_debug_gpio_read();
             
-            // Debug: Test if encoder pins are receiving signals
-            volatile uint32_t debug_enc1_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA5);
-            volatile uint32_t debug_enc1_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
-            volatile uint32_t debug_enc2_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA15);
-            volatile uint32_t debug_enc2_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA16);
             // Prepare CAN message for encoder 1
             // Message format: [Direction(1)] [Velocity(3)] [Position(4)]
             // Direction: 0=stopped, 1=forward, 2=reverse
@@ -410,19 +319,23 @@ void encoder_task(void *arg)
             uint8_t enc1_data[8];
             
             // Pack direction (1 byte) - 0=stopped, 1=forward, 2=reverse
+            // Use actual encoder direction, or 0 if no movement detected
             enc1_data[0] = encoder1_data.direction;
             
             // Pack velocity (3 bytes) - signed 24-bit value
-            enc1_data[1] = (uint8_t)(encoder1_data.velocity & 0xFF);
-            enc1_data[2] = (uint8_t)((encoder1_data.velocity >> 8) & 0xFF);
-            enc1_data[3] = (uint8_t)((encoder1_data.velocity >> 16) & 0xFF);
+            // Use actual encoder velocity
+            int32_t velocity = encoder1_data.velocity;
+            enc1_data[1] = (uint8_t)(velocity & 0xFF);
+            enc1_data[2] = (uint8_t)((velocity >> 8) & 0xFF);
+            enc1_data[3] = (uint8_t)((velocity >> 16) & 0xFF);
             
             // Pack position (4 bytes) - unsigned 32-bit value
-            enc1_data[4] = (uint8_t)(encoder1_data.position & 0xFF);
-            enc1_data[5] = (uint8_t)((encoder1_data.position >> 8) & 0xFF);
-            enc1_data[6] = (uint8_t)((encoder1_data.position >> 16) & 0xFF);
-            enc1_data[7] = (uint8_t)((encoder1_data.position >> 24) & 0xFF);
-            
+            // Use actual encoder position
+            uint32_t position_value = encoder1_data.position;
+            enc1_data[4] = (uint8_t)(position_value & 0xFF);
+            enc1_data[5] = (uint8_t)((position_value >> 8) & 0xFF);
+            enc1_data[6] = (uint8_t)((position_value >> 16) & 0xFF);
+            enc1_data[7] = (uint8_t)((position_value >> 24) & 0xFF);
             
             can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc1_data, 8);
             
@@ -435,18 +348,23 @@ void encoder_task(void *arg)
                 uint8_t enc2_data[8];
                 
                 // Pack direction (1 byte) - 0=stopped, 1=forward, 2=reverse
+                // Use actual encoder direction, or 0 if no movement detected
                 enc2_data[0] = encoder2_data.direction;
                 
                 // Pack velocity (3 bytes) - signed 24-bit value
-                enc2_data[1] = (uint8_t)(encoder2_data.velocity & 0xFF);
-                enc2_data[2] = (uint8_t)((encoder2_data.velocity >> 8) & 0xFF);
-                enc2_data[3] = (uint8_t)((encoder2_data.velocity >> 16) & 0xFF);
+                // Use actual encoder velocity
+                int32_t velocity2 = encoder2_data.velocity;
+                enc2_data[1] = (uint8_t)(velocity2 & 0xFF);
+                enc2_data[2] = (uint8_t)((velocity2 >> 8) & 0xFF);
+                enc2_data[3] = (uint8_t)((velocity2 >> 16) & 0xFF);
                 
                 // Pack position (4 bytes) - unsigned 32-bit value
-                enc2_data[4] = (uint8_t)(encoder2_data.position & 0xFF);
-                enc2_data[5] = (uint8_t)((encoder2_data.position >> 8) & 0xFF);
-                enc2_data[6] = (uint8_t)((encoder2_data.position >> 16) & 0xFF);
-                enc2_data[7] = (uint8_t)((encoder2_data.position >> 24) & 0xFF);
+                // Use actual encoder position
+                uint32_t position_value2 = encoder2_data.position;
+                enc2_data[4] = (uint8_t)(position_value2 & 0xFF);
+                enc2_data[5] = (uint8_t)((position_value2 >> 8) & 0xFF);
+                enc2_data[6] = (uint8_t)((position_value2 >> 16) & 0xFF);
+                enc2_data[7] = (uint8_t)((position_value2 >> 24) & 0xFF);
                 
                 can_app_tx(CAN_ID_ENCODER2_DIR_VEL, enc2_data, 8);
             }
@@ -454,7 +372,7 @@ void encoder_task(void *arg)
             last_transmission_time = current_time;
         }
         
-        // Wait for next transmission cycle
-        vTaskDelay(pdMS_TO_TICKS(ENCODER_POLLING_RATE_MS));
+        // Small delay to prevent excessive CPU usage
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
