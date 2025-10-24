@@ -22,13 +22,13 @@ typedef struct {
 #define TC_QUADRATURE_CHANNEL_ENC1    0
 #define TC_QUADRATURE_CHANNEL_ENC2    1
 
-// Encoder pin definitions
-#define ENC1_A_PIN                    PIO_PA0  // TIOA0
-#define ENC1_B_PIN                    PIO_PA1  // TIOB0
-#define ENC1_ENABLE_PIN               PIO_PD17
-#define ENC2_A_PIN                    PIO_PA15  // TIOA1
-#define ENC2_B_PIN                    PIO_PA16  // TIOB1
-#define ENC2_ENABLE_PIN               PIO_PD27
+// Encoder pin definitions (matching pinconfig_workhead_interface_pinconfig.csv)
+#define ENC1_A_PIN                    PIO_PA5  // TIOA0 (pin 52)
+#define ENC1_B_PIN                    PIO_PA1  // TIOB0 (pin 70)
+#define ENC1_ENABLE_PIN               PIO_PD17 // (pin 53)
+#define ENC2_A_PIN                    PIO_PA15 // TIOA1 (pin 33)
+#define ENC2_B_PIN                    PIO_PA16 // TIOB1 (pin 30)
+#define ENC2_ENABLE_PIN               PIO_PD27 // (pin 32)
 
 // Encoder availability
 #define ENCODER2_AVAILABLE            1  // Both encoders available

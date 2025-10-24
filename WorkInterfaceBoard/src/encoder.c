@@ -94,15 +94,15 @@ bool encoder_tc_init(void)
 // TC channel initialization
 bool encoder_tc_channel_init(uint32_t channel)
 {
-    // Configure PIO for TC TIOA and TIOB pins
+    // Configure PIO for TC TIOA and TIOB pins (matching pinconfig_workhead_interface_pinconfig.csv)
     if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
-        // Configure PA0 as TIOA0 and PA1 as TIOB0
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA0, PIO_DEFAULT);  // TIOA0
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1, PIO_DEFAULT);  // TIOB0
+        // Configure PA5 as TIOA0 and PA1 as TIOB0
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA5, PIO_DEFAULT);  // TIOA0 (pin 52)
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1, PIO_DEFAULT);  // TIOB0 (pin 70)
     } else if (channel == TC_QUADRATURE_CHANNEL_ENC2) {
-        // Configure PA15 as TIOA1 and PA16 as TIOB1 (disabled due to SPI conflict)
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA15, PIO_DEFAULT); // TIOA1
-        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA16, PIO_DEFAULT); // TIOB1
+        // Configure PA15 as TIOA1 and PA16 as TIOB1
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA15, PIO_DEFAULT); // TIOA1 (pin 33)
+        pio_configure(PIOA, PIO_PERIPH_A, PIO_PA16, PIO_DEFAULT); // TIOB1 (pin 30)
     } else {
         return false;
     }
@@ -115,31 +115,26 @@ bool encoder_tc_channel_init(uint32_t channel)
                       TC_BMR_SPEEDEN |                 // Enable speed counting
                       TC_BMR_FILTER |                  // Enable glitch filter
                       TC_BMR_MAXFILT(TC_QUADRATURE_FILTER) | // Set filter value
-                      TC_BMR_TC0XC0S_TIOA1 |           // Connect TIOA0 to XC0 for encoder 1
-                      TC_BMR_TC1XC1S_TIOA0;            // Connect TIOA1 to XC1 for encoder 2
+                      TC_BMR_TC0XC0S_TIOA0 |           // Connect TIOA0 to XC0 for encoder 1
+                      TC_BMR_TC1XC1S_TIOA1;            // Connect TIOA1 to XC1 for encoder 2
     }
     
     // Configure channel mode register for quadrature decoder
     // For SAM4E TC quadrature decoder, use external clock from encoder signals
     if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
         TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC0 |  // Use XC0 clock (TIOA0)
-                                      TC_CMR_BURST_NONE;        // No external gating
+                                      TC_CMR_BURST_NONE |       // No external gating
+                                      TC_CMR_LDRA_RISING |      // Load on rising edge
+                                      TC_CMR_LDRB_FALLING;      // Load on falling edge
     } else if (channel == TC_QUADRATURE_CHANNEL_ENC2) {
         TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC1 |  // Use XC1 clock (TIOA1)
-                                      TC_CMR_BURST_NONE;        // No external gating
+                                      TC_CMR_BURST_NONE |       // No external gating
+                                      TC_CMR_LDRA_RISING |      // Load on rising edge
+                                      TC_CMR_LDRB_FALLING;      // Load on falling edge
     }
     
     // Enable the channel
     TC0->TC_CHANNEL[channel].TC_CCR = TC_CCR_CLKEN | TC_CCR_SWTRG;
-    
-    // Debug: Store register values for verification
-    volatile uint32_t tc_bmr = TC0->TC_BMR;
-    volatile uint32_t tc_cmr = TC0->TC_CHANNEL[channel].TC_CMR;
-    volatile uint32_t tc_cv = TC0->TC_CHANNEL[channel].TC_CV;
-    
-    // Additional debug: Check if TC is actually running
-    volatile uint32_t tc_sr = TC0->TC_CHANNEL[channel].TC_SR;
-    volatile uint32_t tc_qisr = TC0->TC_QISR;
     
     return true;
 }
@@ -185,12 +180,6 @@ void encoder_poll(encoder_data_t* enc_data)
     
     // Read current position from TC counter
     uint32_t current_position = encoder_tc_get_position(enc_data->tc_channel);
-    
-    // Debug: Store current TC register values for debugging
-    volatile uint32_t tc_cv = TC0->TC_CHANNEL[enc_data->tc_channel].TC_CV;
-    volatile uint32_t tc_cmr = TC0->TC_CHANNEL[enc_data->tc_channel].TC_CMR;
-    volatile uint32_t tc_bmr = TC0->TC_BMR;
-    volatile uint32_t tc_qisr = TC0->TC_QISR;
     
     // Check for position change
     if (current_position != enc_data->last_position) {
@@ -308,20 +297,6 @@ void encoder_task(void *arg)
     
     // Wait a bit for encoders to stabilize
     vTaskDelay(pdMS_TO_TICKS(100));
-    
-    // Debug: Test TC configuration
-    volatile uint32_t debug_tc_bmr = TC0->TC_BMR;
-    volatile uint32_t debug_tc_ch0_cmr = TC0->TC_CHANNEL[0].TC_CMR;
-    volatile uint32_t debug_tc_ch0_cv = TC0->TC_CHANNEL[0].TC_CV;
-    volatile uint32_t debug_tc_ch0_sr = TC0->TC_CHANNEL[0].TC_SR;
-    
-    // Test: Try to manually increment the counter to verify TC is working
-    TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG; // Software trigger
-    volatile uint32_t debug_tc_ch0_cv_after_trigger = TC0->TC_CHANNEL[0].TC_CV;
-    
-    // NOTE: If encoder signals are not connected or TC is not properly configured,
-    // the position will remain 0 and the code will use debug_counter for testing.
-    // This is why you see all zeros except the 5th byte (position) counting up.
     
     uint32_t last_transmission_time = 0;
     
