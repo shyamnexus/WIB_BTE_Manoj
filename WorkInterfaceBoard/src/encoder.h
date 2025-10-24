@@ -23,15 +23,15 @@ typedef struct {
 #define TC_QUADRATURE_CHANNEL_ENC2    1
 
 // Encoder pin definitions
-#define ENC1_A_PIN                    PIO_PA5
-#define ENC1_B_PIN                    PIO_PA1
-#define ENC1_ENABLE_PIN               PIO_PD0
-#define ENC2_A_PIN                    PIO_PA15
-#define ENC2_B_PIN                    PIO_PA16
-#define ENC2_ENABLE_PIN               PIO_PD1
+#define ENC1_A_PIN                    PIO_PA0  // TIOA0
+#define ENC1_B_PIN                    PIO_PA1  // TIOB0
+#define ENC1_ENABLE_PIN               PIO_PD17
+#define ENC2_A_PIN                    PIO_PA15  // TIOA1
+#define ENC2_B_PIN                    PIO_PA16  // TIOB1
+#define ENC2_ENABLE_PIN               PIO_PD27
 
 // Encoder availability
-#define ENCODER2_AVAILABLE            1  // Set to 0 if only one encoder is available
+#define ENCODER2_AVAILABLE            1  // Both encoders available
 
 // Quadrature filter value (0-15, higher = more filtering)
 #define TC_QUADRATURE_FILTER          3
