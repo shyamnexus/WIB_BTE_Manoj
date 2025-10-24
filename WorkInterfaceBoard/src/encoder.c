@@ -81,6 +81,12 @@ void encoder1_interrupt_handler(uint32_t id, uint32_t mask)
         enc1_simple.last_state = enc1_simple.current_state;
         enc1_simple.current_state = current_state;
         enc1_simple.state_changed = true;
+        
+        // Send immediate CAN message for pin state changes (like your optimization)
+        uint8_t pin_a_state = (current_state & 0x01) ? 1 : 0;
+        uint8_t pin_b_state = (current_state & 0x02) ? 1 : 0;
+        uint8_t payload[2] = { pin_a_state, pin_b_state };
+        can_app_tx(CAN_ID_ENCODER1_PINS, payload, 2);
     }
 }
 
@@ -124,6 +130,12 @@ void encoder2_interrupt_handler(uint32_t id, uint32_t mask)
         enc2_simple.last_state = enc2_simple.current_state;
         enc2_simple.current_state = current_state;
         enc2_simple.state_changed = true;
+        
+        // Send immediate CAN message for pin state changes (like your optimization)
+        uint8_t pin_a_state = (current_state & 0x01) ? 1 : 0;
+        uint8_t pin_b_state = (current_state & 0x02) ? 1 : 0;
+        uint8_t payload[2] = { pin_a_state, pin_b_state };
+        can_app_tx(CAN_ID_ENCODER2_PINS, payload, 2);
     }
 }
 

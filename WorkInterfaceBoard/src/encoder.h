@@ -39,6 +39,8 @@ typedef struct {
 // CAN message IDs for encoder data
 #define CAN_ID_ENCODER1_DIR_VEL       0x130
 #define CAN_ID_ENCODER2_DIR_VEL       0x131
+#define CAN_ID_ENCODER1_PINS          0x188
+#define CAN_ID_ENCODER2_PINS          0x189
 
 // Function prototypes
 bool encoder_init(void);
