@@ -37,8 +37,8 @@ typedef struct {
 #define TC_QUADRATURE_FILTER          3
 
 // CAN message IDs for encoder data
-#define CAN_ID_ENCODER1_DIR_VEL       0x100
-#define CAN_ID_ENCODER2_DIR_VEL       0x101
+#define CAN_ID_ENCODER1_DIR_VEL       0x130
+#define CAN_ID_ENCODER2_DIR_VEL       0x131
 
 // Function prototypes
 bool encoder_init(void);
