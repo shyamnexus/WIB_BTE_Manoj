@@ -24,7 +24,11 @@ extern "C" {
 
 // Encoder availability flags
 #define ENCODER1_AVAILABLE         1
-#define ENCODER2_AVAILABLE         1  
+#define ENCODER2_AVAILABLE         1
+
+// Interrupt-based encoder configuration
+#define ENCODER_INTERRUPT_PRIORITY 5  // Interrupt priority (0-15, lower = higher priority)
+#define ENCODER_DEBOUNCE_US        50  // Debounce time in microseconds  
 
 // Encoder data structure
 typedef struct {
@@ -49,6 +53,12 @@ void encoder_task(void *arg);
 int32_t calculate_velocity(encoder_data_t* enc_data, uint32_t current_time);
 void apply_velocity_smoothing(encoder_data_t* enc_data);
 bool is_direction_change_allowed(encoder_data_t* enc_data, uint32_t current_time, uint8_t new_direction);
+
+// Interrupt-based encoder functions
+bool encoder_interrupt_init(void);
+void encoder_interrupt_handler(const uint32_t id, const uint32_t index);
+uint32_t encoder_get_pulse_count(void);
+void encoder_reset_pulse_count(void);
 
 #ifdef __cplusplus
 }
