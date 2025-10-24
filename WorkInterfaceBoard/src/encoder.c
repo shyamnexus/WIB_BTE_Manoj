@@ -58,11 +58,11 @@ bool encoder_init(void)
     
     // Configure enable pins as outputs and set them high (enable encoders)
     pio_configure(PIOD, PIO_OUTPUT_0, ENC1_ENABLE_PIN, PIO_DEFAULT);
-    pio_clear(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1
+    pio_set(PIOD, ENC1_ENABLE_PIN);  // Enable encoder 1 (set high)
     
     if (ENCODER2_AVAILABLE) {
         pio_configure(PIOD, PIO_OUTPUT_0, ENC2_ENABLE_PIN, PIO_DEFAULT);
-        pio_clear(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2
+        pio_set(PIOD, ENC2_ENABLE_PIN);  // Enable encoder 2 (set high)
     }
     
     return true;
@@ -104,17 +104,21 @@ bool encoder_tc_channel_init(uint32_t channel)
     }
     
     // Configure TC for quadrature decoder mode
-    // Set up Block Mode Register for quadrature decoding
-    TC0->TC_BMR = TC_BMR_QDEN |                    // Enable quadrature decoder
-                  TC_BMR_POSEN |                   // Enable position counting
-                  TC_BMR_SPEEDEN |                 // Enable speed counting
-                  TC_BMR_FILTER |                  // Enable glitch filter
-                  TC_BMR_MAXFILT(TC_QUADRATURE_FILTER); // Set filter value
+    // Set up Block Mode Register for quadrature decoding (only once, not per channel)
+    if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
+        TC0->TC_BMR = TC_BMR_QDEN |                    // Enable quadrature decoder
+                      TC_BMR_POSEN |                   // Enable position counting
+                      TC_BMR_SPEEDEN |                 // Enable speed counting
+                      TC_BMR_FILTER |                  // Enable glitch filter
+                      TC_BMR_MAXFILT(TC_QUADRATURE_FILTER); // Set filter value
+    }
     
     // Configure channel mode register for quadrature decoder
-    // Clock selection: XC0 for channel 0, XC1 for channel 1
-    uint32_t clock_sel = (channel == 0) ? TC_CMR_TCCLKS_XC0 : TC_CMR_TCCLKS_XC1;
-    TC0->TC_CHANNEL[channel].TC_CMR = clock_sel;
+    // For quadrature decoder mode, the channel should be in capture mode
+    // and configured to use the quadrature decoder inputs
+    TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC0 |  // Use XC0 clock
+                                      TC_CMR_LDRA_RISING |  // Load on rising edge of TIOA
+                                      TC_CMR_LDRB_FALLING;  // Load on falling edge of TIOB
     
     // Enable the channel
     TC0->TC_CHANNEL[channel].TC_CCR = TC_CCR_CLKEN | TC_CCR_SWTRG;
@@ -155,6 +159,23 @@ uint8_t encoder_tc_get_direction(uint32_t channel)
     return 0; // No direction change or stopped
 }
 
+// Debug function to check TC status
+void encoder_debug_tc_status(void)
+{
+    volatile uint32_t tc_bmr = TC0->TC_BMR;
+    volatile uint32_t tc_qisr = TC0->TC_QISR;
+    volatile uint32_t tc_ch0_cv = TC0->TC_CHANNEL[0].TC_CV;
+    volatile uint32_t tc_ch1_cv = TC0->TC_CHANNEL[1].TC_CV;
+    volatile uint32_t tc_ch0_cmr = TC0->TC_CHANNEL[0].TC_CMR;
+    volatile uint32_t tc_ch1_cmr = TC0->TC_CHANNEL[1].TC_CMR;
+    volatile uint32_t tc_ch0_sr = TC0->TC_CHANNEL[0].TC_SR;
+    volatile uint32_t tc_ch1_sr = TC0->TC_CHANNEL[1].TC_SR;
+    
+    // Store debug values (they will be visible in debugger)
+    (void)tc_bmr; (void)tc_qisr; (void)tc_ch0_cv; (void)tc_ch1_cv;
+    (void)tc_ch0_cmr; (void)tc_ch1_cmr; (void)tc_ch0_sr; (void)tc_ch1_sr;
+}
+
 void encoder_poll(encoder_data_t* enc_data)
 {
     // Skip polling if this is encoder2 and it's not available
@@ -167,6 +188,10 @@ void encoder_poll(encoder_data_t* enc_data)
     
     // Read current position from TC counter
     uint32_t current_position = encoder_tc_get_position(enc_data->tc_channel);
+    
+    // Debug: Store raw TC counter value for debugging
+    volatile uint32_t debug_tc_counter = current_position;
+    volatile uint32_t debug_tc_channel = enc_data->tc_channel;
     
     // Check for position change
     if (current_position != enc_data->last_position) {
@@ -290,6 +315,8 @@ void encoder_task(void *arg)
         
         // Send encoder data over CAN periodically
         if (current_time - last_transmission_time >= ENCODER_POLLING_RATE_MS) {
+            // Debug: Check TC status periodically
+            encoder_debug_tc_status();
             // Prepare CAN message for encoder 1
             uint8_t enc1_data[8];
             
