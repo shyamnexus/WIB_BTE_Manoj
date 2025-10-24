@@ -13,37 +13,42 @@ extern "C" {
 #define VELOCITY_SMOOTHING_FACTOR  0 //0.7f  // Smoothing factor for velocity (0.0 = no smoothing, 1.0 = no change)
 #define DIRECTION_DEBOUNCE_MS      100    // Minimum time between direction changes in ms
 
+// TC Quadrature Decoder Configuration
+// ENC1 uses TC0 channel 0: PA5/TIOA0, PA1/TIOB0
+// ENC2 uses TC0 channel 1: PA15/TIOA1, PA16/TIOB1
+#define TC_QUADRATURE_TC           TC0
+#define TC_QUADRATURE_CHANNEL_ENC1 0
+#define TC_QUADRATURE_CHANNEL_ENC2 1
+
 // Encoder pin definitions based on pinconfig_workhead_interface_pinconfig.csv
-// Note: PA15 is used for SPI DRDY, so ENC2_A is not available
-#define ENC1_A_PIN                 PIO_PA5
-#define ENC1_B_PIN                 PIO_PA1
+// TC quadrature decoder pins (TIOA/TIOB are automatically configured by TC)
+#define ENC1_A_PIN                 PIO_PA5   // TIOA0
+#define ENC1_B_PIN                 PIO_PA1   // TIOB0
 #define ENC1_ENABLE_PIN            PIO_PD17
-#define ENC2_A_PIN                 PIO_PA15  // Not available - used for SPI DRDY
-#define ENC2_B_PIN                 PIO_PA16
+#define ENC2_A_PIN                 PIO_PA15  // TIOA1
+#define ENC2_B_PIN                 PIO_PA16  // TIOB1
 #define ENC2_ENABLE_PIN            PIO_PD27
 
 // Encoder availability flags
 #define ENCODER1_AVAILABLE         1
 #define ENCODER2_AVAILABLE         1
 
-// Interrupt-based encoder configuration
-#define ENCODER_INTERRUPT_PRIORITY 5  // Interrupt priority (0-15, lower = higher priority)
-#define ENCODER_DEBOUNCE_US        50  // Debounce time in microseconds  
+// TC Quadrature Decoder configuration
+#define TC_QUADRATURE_FILTER       3       // Glitch filter value (0-63)
+#define TC_QUADRATURE_MAX_FILTER   63      // Maximum filter value  
 
 // Encoder data structure
 typedef struct {
-    uint32_t position;        // Current position (pulses)
+    uint32_t position;        // Current position (pulses from TC counter)
     int32_t velocity;         // Current velocity (pulses per second)
     int32_t smoothed_velocity; // Smoothed velocity for transmission
     uint8_t direction;        // Direction: 0=stopped, 1=forward, 2=reverse
-    uint8_t state_a;          // Current state of A channel
-    uint8_t state_b;          // Current state of B channel
-    uint8_t prev_state_a;     // Previous state of A channel
-    uint8_t prev_state_b;     // Previous state of B channel
+    uint32_t last_position;   // Previous position for velocity calculation
     uint32_t last_update_time; // Last update time in ms
     uint32_t last_direction_change; // Time of last direction change
     uint32_t pulse_count;     // Total pulse count for velocity calculation
     uint32_t velocity_window_start; // Start time of velocity calculation window
+    uint32_t tc_channel;      // TC channel number for this encoder
 } encoder_data_t;
 
 // Function prototypes
@@ -54,11 +59,12 @@ int32_t calculate_velocity(encoder_data_t* enc_data, uint32_t current_time);
 void apply_velocity_smoothing(encoder_data_t* enc_data);
 bool is_direction_change_allowed(encoder_data_t* enc_data, uint32_t current_time, uint8_t new_direction);
 
-// Interrupt-based encoder functions
-bool encoder_interrupt_init(void);
-void encoder_interrupt_handler(const uint32_t id, const uint32_t index);
-uint32_t encoder_get_pulse_count(void);
-void encoder_reset_pulse_count(void);
+// TC Quadrature Decoder functions
+bool encoder_tc_init(void);
+bool encoder_tc_channel_init(uint32_t channel);
+uint32_t encoder_tc_get_position(uint32_t channel);
+void encoder_tc_reset_position(uint32_t channel);
+uint8_t encoder_tc_get_direction(uint32_t channel);
 
 #ifdef __cplusplus
 }
