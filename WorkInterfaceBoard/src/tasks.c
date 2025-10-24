@@ -49,6 +49,9 @@ void task_encoder1_pin_monitor(void *arg){
 	pio_configure(PIOD, PIO_OUTPUT_0, PIO_PD17, PIO_DEFAULT);
 	pio_clear(PIOD, PIO_PD17);  // Enable encoder 1 (set low)
 	
+	uint8_t  pin_a_state_prev = 0;
+	uint8_t  pin_b_state_prev = 0;
+	
 	while(1) {
 		// Read encoder 1 pin states
 		uint8_t pin_a_state = pio_get(PIOA, PIO_INPUT, PIO_PA5) ? 1 : 0;
@@ -57,9 +60,13 @@ void task_encoder1_pin_monitor(void *arg){
 		// Prepare CAN message with pin states
 		uint8_t payload[2] = { pin_a_state, pin_b_state };
 		
-		// Send over CAN with ID 0x188
-		can_app_tx(CAN_ID_ENCODER1_PINS, payload, 2);
-		
+		// Send over CAN with ID 0x188 only if pin states changed
+		if( (pin_a_state_prev != pin_a_state)||(pin_b_state_prev!=pin_b_state))
+		{
+			can_app_tx(CAN_ID_ENCODER1_PINS, payload, 2);
+			pin_a_state_prev =  pin_a_state;
+			pin_b_state_prev = pin_b_state ;
+		}
 		// Poll at 10ms intervals (100 Hz)
 		vTaskDelay(pdMS_TO_TICKS(10));
 	}
