@@ -66,6 +66,8 @@ uint32_t encoder_tc_get_position(uint32_t channel);
 void encoder_tc_reset_position(uint32_t channel);
 uint8_t encoder_tc_get_direction(uint32_t channel);
 void encoder_debug_tc_status(void);
+void encoder_debug_gpio_read(void);
+uint32_t encoder_gpio_read_position(uint32_t channel);
 
 #ifdef __cplusplus
 }
