@@ -136,6 +136,10 @@ bool encoder_tc_channel_init(uint32_t channel)
     volatile uint32_t tc_cmr = TC0->TC_CHANNEL[channel].TC_CMR;
     volatile uint32_t tc_cv = TC0->TC_CHANNEL[channel].TC_CV;
     
+    // Additional debug: Check if TC is actually running
+    volatile uint32_t tc_sr = TC0->TC_CHANNEL[channel].TC_SR;
+    volatile uint32_t tc_qisr = TC0->TC_QISR;
+    
     return true;
 }
 
@@ -298,6 +302,16 @@ void encoder_task(void *arg)
     
     // Wait a bit for encoders to stabilize
     vTaskDelay(pdMS_TO_TICKS(100));
+    
+    // Debug: Test TC configuration
+    volatile uint32_t debug_tc_bmr = TC0->TC_BMR;
+    volatile uint32_t debug_tc_ch0_cmr = TC0->TC_CHANNEL[0].TC_CMR;
+    volatile uint32_t debug_tc_ch0_cv = TC0->TC_CHANNEL[0].TC_CV;
+    volatile uint32_t debug_tc_ch0_sr = TC0->TC_CHANNEL[0].TC_SR;
+    
+    // Test: Try to manually increment the counter to verify TC is working
+    TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG; // Software trigger
+    volatile uint32_t debug_tc_ch0_cv_after_trigger = TC0->TC_CHANNEL[0].TC_CV;
     
     uint32_t last_transmission_time = 0;
     
