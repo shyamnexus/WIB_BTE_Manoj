@@ -7,7 +7,17 @@
 // Encoder data structures
 static encoder_data_t encoder1_data = {0};
 static encoder_data_t encoder2_data = {0};
+// Define TickType_t if not already defined
+#ifndef TickType_t
+typedef portTickType TickType_t;
+#endif
 
+#ifndef portTICK_PERIOD_MS
+#define portTICK_PERIOD_MS portTICK_RATE_MS // Backward compatibility macro
+#endif
+#ifndef pdMS_TO_TICKS
+#define pdMS_TO_TICKS(ms) ((TickType_t)((ms) / portTICK_RATE_MS)) // Convert ms to OS ticks
+#endif
 // Configuration constants
 #define ENCODER_POLLING_RATE_MS    50      // Polling rate in milliseconds
 #define VELOCITY_WINDOW_MS         100     // Velocity calculation window in milliseconds
