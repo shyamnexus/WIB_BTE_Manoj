@@ -114,13 +114,17 @@ bool encoder_tc_channel_init(uint32_t channel)
                       TC_BMR_SPEEDEN |                 // Enable speed counting
                       TC_BMR_FILTER |                  // Enable glitch filter
                       TC_BMR_MAXFILT(TC_QUADRATURE_FILTER) | // Set filter value
-                      TC_BMR_TC0XC0S_TIOA0;            // Connect TIOA0 to XC0 for encoder 1
+                      TC_BMR_TC0XC0S_TIOA0 |           // Connect TIOA0 to XC0 for encoder 1
+                      TC_BMR_TC1XC1S_TIOA1;            // Connect TIOA1 to XC1 for encoder 2
     }
     
     // Configure channel mode register for quadrature decoder
     // For SAM4E TC quadrature decoder, use external clock from encoder signals
     if (channel == TC_QUADRATURE_CHANNEL_ENC1) {
         TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC0 |  // Use XC0 clock (TIOA0)
+                                      TC_CMR_BURST_NONE;        // No external gating
+    } else if (channel == TC_QUADRATURE_CHANNEL_ENC2) {
+        TC0->TC_CHANNEL[channel].TC_CMR = TC_CMR_TCCLKS_XC1 |  // Use XC1 clock (TIOA1)
                                       TC_CMR_BURST_NONE;        // No external gating
     }
     

@@ -26,12 +26,12 @@ typedef struct {
 #define ENC1_A_PIN                    PIO_PA0  // TIOA0
 #define ENC1_B_PIN                    PIO_PA1  // TIOB0
 #define ENC1_ENABLE_PIN               PIO_PD17
-#define ENC2_A_PIN                    PIO_PA15  // Conflicts with SPI DRDY
-#define ENC2_B_PIN                    PIO_PA16
+#define ENC2_A_PIN                    PIO_PA15  // TIOA1
+#define ENC2_B_PIN                    PIO_PA16  // TIOB1
 #define ENC2_ENABLE_PIN               PIO_PD27
 
 // Encoder availability
-#define ENCODER2_AVAILABLE            0  // Disabled due to pin conflict with SPI DRDY
+#define ENCODER2_AVAILABLE            1  // Both encoders available
 
 // Quadrature filter value (0-15, higher = more filtering)
 #define TC_QUADRATURE_FILTER          3
