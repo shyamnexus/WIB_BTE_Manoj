@@ -30,16 +30,16 @@ int main(void)
     while(1) {
         uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
         
-        // Poll encoder
+        // Poll encoder data
         simple_encoder_poll();
         
-        // Send encoder data over CAN every 50ms
+        // Send encoder data over CAN every 50ms using existing CAN IDs
         if (current_time - last_transmission_time >= 50) {
             
             // Get encoder data
             simple_encoder_data_t* enc_data = simple_encoder_get_data();
             
-            // Prepare CAN message
+            // Prepare CAN message using existing format
             // Message format: [Direction(1)] [Velocity(3)] [Position(4)]
             uint8_t can_data[8];
             
@@ -59,8 +59,8 @@ int main(void)
             can_data[6] = (uint8_t)((position_value >> 16) & 0xFF);
             can_data[7] = (uint8_t)((position_value >> 24) & 0xFF);
             
-            // Send over CAN
-            can_app_tx(CAN_ID_ENCODER_DIR_VEL, can_data, 8);
+            // Send over CAN using existing CAN ID for encoder 1
+            can_app_tx(CAN_ID_ENCODER1_DIR_VEL, can_data, 8);
             
             last_transmission_time = current_time;
         }
