@@ -22,25 +22,20 @@ typedef struct {
 #define TC_QUADRATURE_CHANNEL_ENC1    0
 #define TC_QUADRATURE_CHANNEL_ENC2    1
 
-// Encoder pin definitions (matching pinconfig_workhead_interface_pinconfig.csv)
-#define ENC1_A_PIN                    PIO_PA5  // TIOA0 (pin 52)
-#define ENC1_B_PIN                    PIO_PA1  // TIOB0 (pin 70)
-#define ENC1_ENABLE_PIN               PIO_PD17 // (pin 53)
-#define ENC2_A_PIN                    PIO_PA15 // TIOA1 (pin 33)
-#define ENC2_B_PIN                    PIO_PA16 // TIOB1 (pin 30)
-#define ENC2_ENABLE_PIN               PIO_PD27 // (pin 32)
+// Encoder pin definitions - Simple single encoder using QDE
+#define ENC_A_PIN                     PIO_PA0  // TIOA0 (pin 52) - Quadrature A
+#define ENC_B_PIN                     PIO_PA1  // TIOB0 (pin 70) - Quadrature B
+#define ENC_ENABLE_PIN                PIO_PD17 // (pin 53) - Enable pin
 
-// Encoder availability
-#define ENCODER2_AVAILABLE            1  // Both encoders available
+// Encoder availability - Only one encoder for simplicity
+#define ENCODER2_AVAILABLE            0  // Only encoder 1 available
 
 // Quadrature filter value (0-15, higher = more filtering)
 #define TC_QUADRATURE_FILTER          3
 
-// CAN message IDs for encoder data
-#define CAN_ID_ENCODER1_DIR_VEL       0x130
-#define CAN_ID_ENCODER2_DIR_VEL       0x131
-#define CAN_ID_ENCODER1_PINS          0x188
-#define CAN_ID_ENCODER2_PINS          0x189
+// CAN message IDs for encoder data - Simple single encoder
+#define CAN_ID_ENCODER_DIR_VEL        0x130
+#define CAN_ID_ENCODER_PINS           0x188
 
 // Function prototypes
 bool encoder_init(void);
