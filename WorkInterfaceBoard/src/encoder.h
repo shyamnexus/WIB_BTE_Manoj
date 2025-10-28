@@ -48,6 +48,8 @@ void encoder1_reset_position(void);
 bool encoder1_is_enabled(void);
 void encoder1_debug_status(void);
 void encoder1_test_operation(void);
+bool encoder1_verify_configuration(void);
+void encoder1_test_tc0_config(void);
 
 // FreeRTOS task for encoder reading and CAN transmission
 void encoder1_task(void *arg);
