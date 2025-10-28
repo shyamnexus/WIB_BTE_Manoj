@@ -16,13 +16,25 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+
+#ifndef TickType_t
+typedef portTickType TickType_t; // Backward-compatible alias if TickType_t isn't defined
+#endif
+#ifndef pdMS_TO_TICKS
+#define pdMS_TO_TICKS(ms) ((TickType_t)((ms) / portTICK_PERIOD_MS)) // Convert milliseconds to OS ticks
+#endif
+
+#ifndef portTICK_PERIOD_MS
+#define portTICK_PERIOD_MS portTICK_RATE_MS // Legacy macro mapping
+#endif
+
 // Global encoder data
 static encoder_data_t g_encoder1_data = {0};
 static int32_t g_last_position = 0;
 static bool g_encoder_initialized = false;
 
 // FreeRTOS task handle
-static TaskHandle_t encoder1_task_handle = NULL;
+//static TaskHandle_t encoder1_task_handle = NULL;
 
 // Forward declarations
 static void encoder1_configure_pins(void);

@@ -615,6 +615,12 @@
     <Compile Include="src\can_app.c">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\encoder.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\encoder.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\tasks.c">
       <SubType>compile</SubType>
     </Compile>
