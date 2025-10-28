@@ -107,10 +107,13 @@ static void encoder1_configure_tc(void)
     // Configure TC0 Channel 0 for quadrature decoder mode
     // For QDE mode, we need to configure it as a simple counter mode
     // Set clock source to MCK/2, enable waveform mode for QDE
-    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
-                                TC_CMR_WAVE |                   // Enable waveform mode
-                                TC_CMR_WAVSEL_UP;               // UP mode for QDE
+//     TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
+//                                 TC_CMR_WAVE |                   // Enable waveform mode
+//                                 TC_CMR_WAVSEL_UP;               // UP mode for QDE
     
+	TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_XC0 |  // External clock from TIOA0 (encoder A)
+                                TC_CMR_CLKI; 
+	
     // Enable the timer counter
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKEN;
     
@@ -272,15 +275,17 @@ void encoder1_debug_status(void)
     volatile int32_t debug_position = g_encoder1_data.position;
     
     // Check if TIOA0 and TIOB0 pins are configured correctly
-    volatile bool debug_tioa0_configured = (PIOA->PIO_ABSR & PIO_PA0) == 0; // Should be 0 for peripheral A
-    volatile bool debug_tiob0_configured = (PIOA->PIO_ABSR & PIO_PA1) == 0; // Should be 0 for peripheral A
+   // volatile bool debug_tioa0_configured = (PIOA->PIO_ABSR & PIO_PA0) == 0; // Should be 0 for peripheral A
+ //   volatile bool debug_tiob0_configured = (PIOA->PIO_ABSR & PIO_PA1) == 0; // Should be 0 for peripheral A
     
     // Check if enable pin is configured correctly
     volatile bool debug_enable_pin_configured = (PIOD->PIO_OSR & PIO_PD17) != 0; // Should be 1 for output
     
     (void)debug_tc_cv; (void)debug_tc_sr; (void)debug_tc_cmr; (void)debug_tc_bmr; (void)debug_tc_qier;
     (void)debug_pioa_pdsr; (void)debug_piod_pdsr; (void)debug_encoder_enabled; (void)debug_encoder_initialized;
-    (void)debug_position; (void)debug_tioa0_configured; (void)debug_tiob0_configured; (void)debug_enable_pin_configured;
+    (void)debug_position; (void)
+	//debug_tioa0_configured; (void)debug_tiob0_configured; 
+	(void)debug_enable_pin_configured;
 }
 
 // Test function to manually check encoder operation
