@@ -16,9 +16,9 @@ typedef struct {
 #define ENC_A_PIN                    PIO_PA0  // TIOA0 (pin PA0)
 #define ENC_B_PIN                    PIO_PA1  // TIOB0 (pin PA1)
 
-// CAN message IDs for encoder data
-#define CAN_ID_ENCODER_DIR_VEL       0x130    // Direction, velocity, and position
-#define CAN_ID_ENCODER_PINS          0x188    // Pin states (A and B pins)
+// Use existing CAN message IDs from can_app.h
+// CAN_ID_ENCODER1_DIR_VEL is already defined as 0x130
+// CAN_ID_ENCODER1_PINS is already defined as 0x188
 
 // Function prototypes
 bool simple_encoder_init(void);

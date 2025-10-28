@@ -78,11 +78,11 @@ void encoder_interrupt_handler(uint32_t id, uint32_t mask)
         simple_enc.current_state = current_state;
         simple_enc.state_changed = true;
         
-        // Send immediate CAN message for pin state changes
+        // Send immediate CAN message for pin state changes using existing CAN ID
         uint8_t pin_a_state = (current_state & 0x01) ? 1 : 0;
         uint8_t pin_b_state = (current_state & 0x02) ? 1 : 0;
         uint8_t payload[2] = { pin_a_state, pin_b_state };
-        can_app_tx(CAN_ID_ENCODER_PINS, payload, 2);
+        can_app_tx(CAN_ID_ENCODER1_PINS, payload, 2);
     }
 }
 
@@ -184,10 +184,10 @@ void simple_encoder_task(void *arg)
         // Poll encoder
         simple_encoder_poll();
         
-        // Send encoder data over CAN periodically
+        // Send encoder data over CAN periodically using existing CAN ID
         if (current_time - last_transmission_time >= ENCODER_POLLING_RATE_MS) {
             
-            // Prepare CAN message for encoder
+            // Prepare CAN message for encoder using existing format
             // Message format: [Direction(1)] [Velocity(3)] [Position(4)]
             // Direction: 0=stopped, 1=forward, 2=reverse
             // Velocity: signed 24-bit value (pulses per second)
@@ -210,7 +210,8 @@ void simple_encoder_task(void *arg)
             enc_data[6] = (uint8_t)((position_value >> 16) & 0xFF);
             enc_data[7] = (uint8_t)((position_value >> 24) & 0xFF);
             
-            can_app_tx(CAN_ID_ENCODER_DIR_VEL, enc_data, 8);
+            // Use existing CAN ID for encoder 1 direction, velocity, and position
+            can_app_tx(CAN_ID_ENCODER1_DIR_VEL, enc_data, 8);
             
             last_transmission_time = current_time;
         }
