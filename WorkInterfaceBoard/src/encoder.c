@@ -98,22 +98,19 @@ static void encoder1_configure_pins(void)
 static void encoder1_configure_tc(void)
 {
     // Configure Timer Counter 0 for quadrature decoder mode using direct register access
+    // For QDE mode, we need to configure it in waveform mode with external clock
+    
     // Disable TC0 first
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKDIS;
     
     // Wait for disable to take effect
     while (TC0->TC_CHANNEL[0].TC_SR & TC_SR_CLKSTA);
     
-    // Configure TC0 Channel 0 for quadrature decoder mode
-    // For QDE mode, we need to configure it as a simple counter mode
-    // Set clock source to MCK/2, enable waveform mode for QDE
-//     TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
-//                                 TC_CMR_WAVE |                   // Enable waveform mode
-//                                 TC_CMR_WAVSEL_UP;               // UP mode for QDE
+    // Configure TC0 Channel 0 in waveform mode with external clock
+    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_XC0 |  // External clock from TIOA0 (encoder A)
+                                TC_CMR_WAVE |        // Enable waveform mode (required for QDE)
+                                TC_CMR_WAVSEL_UP;    // UP mode for counting
     
-	TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_XC0 |  // External clock from TIOA0 (encoder A)
-                                TC_CMR_CLKI; 
-	
     // Enable the timer counter
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKEN;
     
@@ -129,19 +126,21 @@ static void encoder1_configure_tc(void)
 static void encoder1_configure_qde(void)
 {
     // Configure Quadrature Decoder mode using direct register access
+    // Note: ASF doesn't provide QDE configuration functions, so we use direct register access
+    
     // Enable QDE in TC_BMR register
     TC0->TC_BMR = TC_BMR_QDEN |           // Enable QDE
                   TC_BMR_POSEN |          // Enable position counting
                   TC_BMR_SPEEDEN |        // Enable speed counting
                   TC_BMR_FILTER |         // Enable input filter
-                  TC_BMR_MAXFILT(0x3F);   // Set maximum filter value
+                  TC_BMR_MAXFILT(0x3F);   // Set maximum filter value (63)
     
     // Configure QDE interrupt enable (optional)
     TC0->TC_QIER = TC_QIER_IDX |          // Enable index interrupt
                    TC_QIER_DIRCHG |       // Enable direction change interrupt
                    TC_QIER_QERR;          // Enable quadrature error interrupt
     
-    // Reset the position counter to zero
+    // Reset the position counter to zero using direct register access
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG;
     
     // Debug: Store QDE configuration values

@@ -13,7 +13,7 @@
 #ifndef ENCODER_H_
 #define ENCODER_H_
 
-#include "sam.h"
+#include "sam4e8c.h"
 #include <stdint.h>
 #include <stdbool.h>
 
