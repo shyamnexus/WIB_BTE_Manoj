@@ -60,6 +60,11 @@ bool encoder1_init(void)
     pio_configure(PIOD, PIO_OUTPUT_0, PIO_PD17, 0);
     pio_set(PIOD, PIO_PD17); // Set high (disabled)
     
+    // Debug: Check enable pin configuration
+    volatile bool debug_enable_pin_configured = (PIOD->PIO_OSR & PIO_PD17) != 0;
+    volatile bool debug_enable_pin_state = (PIOD->PIO_PDSR & PIO_PD17) != 0;
+    (void)debug_enable_pin_configured; (void)debug_enable_pin_state;
+    
     // Initialize encoder data
     g_encoder1_data.position = 0;
     g_encoder1_data.velocity = 0;
@@ -85,6 +90,9 @@ static void encoder1_configure_pins(void)
     
     // Enable PIOA peripheral clock for Timer Counter 0
     pmc_enable_periph_clk(ID_TC0);
+    
+    // Enable PIOD clock for enable pin
+    pmc_enable_periph_clk(ID_PIOD);
 }
 
 static void encoder1_configure_tc(void)
@@ -93,7 +101,11 @@ static void encoder1_configure_tc(void)
     // Disable TC0 first
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKDIS;
     
+    // Wait for disable to take effect
+    while (TC0->TC_CHANNEL[0].TC_SR & TC_SR_CLKSTA);
+    
     // Configure TC0 Channel 0 for quadrature decoder mode
+    // For quadrature decoder, we need to configure it as a capture mode
     // Set clock source to MCK/2, enable clock input, external trigger on rising edge
     TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
                                 TC_CMR_CLKI |                   // Clock invert
@@ -101,6 +113,17 @@ static void encoder1_configure_tc(void)
                                 TC_CMR_ABETRG |                 // TIOA is used as external trigger
                                 TC_CMR_LDRA_RISING |            // Load RA on rising edge
                                 TC_CMR_LDRB_FALLING;            // Load RB on falling edge
+    
+    // Enable the timer counter
+    TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKEN;
+    
+    // Wait for enable to take effect
+    while (!(TC0->TC_CHANNEL[0].TC_SR & TC_SR_CLKSTA));
+    
+    // Debug: Store configuration values
+    volatile uint32_t debug_tc_cmr = TC0->TC_CHANNEL[0].TC_CMR;
+    volatile uint32_t debug_tc_sr = TC0->TC_CHANNEL[0].TC_SR;
+    (void)debug_tc_cmr; (void)debug_tc_sr;
 }
 
 static void encoder1_configure_qde(void)
@@ -117,6 +140,15 @@ static void encoder1_configure_qde(void)
     TC0->TC_QIER = TC_QIER_IDX |          // Enable index interrupt
                    TC_QIER_DIRCHG |       // Enable direction change interrupt
                    TC_QIER_QERR;          // Enable quadrature error interrupt
+    
+    // Reset the position counter to zero
+    TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG;
+    
+    // Debug: Store QDE configuration values
+    volatile uint32_t debug_tc_bmr = TC0->TC_BMR;
+    volatile uint32_t debug_tc_qier = TC0->TC_QIER;
+    volatile uint32_t debug_tc_sr_after_reset = TC0->TC_CHANNEL[0].TC_SR;
+    (void)debug_tc_bmr; (void)debug_tc_qier; (void)debug_tc_sr_after_reset;
 }
 
 bool encoder1_enable(bool enable)
@@ -134,10 +166,18 @@ bool encoder1_enable(bool enable)
         tc_write_rc(TC0, 0, 0);
         g_encoder1_data.position = 0;
         g_last_position = 0;
+        
+        // Debug: Check enable pin state after enabling
+        volatile bool debug_enable_pin_state_after = (PIOD->PIO_PDSR & PIO_PD17) != 0;
+        (void)debug_enable_pin_state_after;
     } else {
         // Disable encoder (set PD17 high)
         pio_set(PIOD, PIO_PD17);
         g_encoder1_data.enabled = false;
+        
+        // Debug: Check enable pin state after disabling
+        volatile bool debug_enable_pin_state_after = (PIOD->PIO_PDSR & PIO_PD17) != 0;
+        (void)debug_enable_pin_state_after;
     }
     
     return true;
@@ -150,7 +190,15 @@ int32_t encoder1_read_position(void)
     }
     
     // Read current position from Timer Counter using direct register access
+    // For quadrature decoder mode, we need to read the position from the QDE register
     uint32_t tc_value = TC0->TC_CHANNEL[0].TC_CV;
+    
+    // Debug: Store register values for analysis
+    volatile uint32_t debug_tc_cv = tc_value;
+    volatile uint32_t debug_tc_sr = TC0->TC_CHANNEL[0].TC_SR;
+    volatile uint32_t debug_tc_cmr = TC0->TC_CHANNEL[0].TC_CMR;
+    volatile uint32_t debug_tc_bmr = TC0->TC_BMR;
+    volatile uint32_t debug_tc_qier = TC0->TC_QIER;
     
     // Convert to signed 32-bit value
     int32_t position = (int32_t)tc_value;
@@ -211,6 +259,32 @@ bool encoder1_is_enabled(void)
     return g_encoder1_data.enabled;
 }
 
+// Debug function to check encoder status
+void encoder1_debug_status(void)
+{
+    volatile uint32_t debug_tc_cv = TC0->TC_CHANNEL[0].TC_CV;
+    volatile uint32_t debug_tc_sr = TC0->TC_CHANNEL[0].TC_SR;
+    volatile uint32_t debug_tc_cmr = TC0->TC_CHANNEL[0].TC_CMR;
+    volatile uint32_t debug_tc_bmr = TC0->TC_BMR;
+    volatile uint32_t debug_tc_qier = TC0->TC_QIER;
+    volatile uint32_t debug_pioa_pdsr = PIOA->PIO_PDSR;
+    volatile uint32_t debug_piod_pdsr = PIOD->PIO_PDSR;
+    volatile bool debug_encoder_enabled = g_encoder1_data.enabled;
+    volatile bool debug_encoder_initialized = g_encoder_initialized;
+    volatile int32_t debug_position = g_encoder1_data.position;
+    
+    // Check if TIOA0 and TIOB0 pins are configured correctly
+    volatile bool debug_tioa0_configured = (PIOA->PIO_ABSR & PIO_PA0) == 0; // Should be 0 for peripheral A
+    volatile bool debug_tiob0_configured = (PIOA->PIO_ABSR & PIO_PA1) == 0; // Should be 0 for peripheral A
+    
+    // Check if enable pin is configured correctly
+    volatile bool debug_enable_pin_configured = (PIOD->PIO_OSR & PIO_PD17) != 0; // Should be 1 for output
+    
+    (void)debug_tc_cv; (void)debug_tc_sr; (void)debug_tc_cmr; (void)debug_tc_bmr; (void)debug_tc_qier;
+    (void)debug_pioa_pdsr; (void)debug_piod_pdsr; (void)debug_encoder_enabled; (void)debug_encoder_initialized;
+    (void)debug_position; (void)debug_tioa0_configured; (void)debug_tiob0_configured; (void)debug_enable_pin_configured;
+}
+
 // FreeRTOS task for encoder reading and CAN transmission
 void encoder1_task(void *arg)
 {
@@ -231,10 +305,16 @@ void encoder1_task(void *arg)
     uint32_t task_interval = 0;
     const uint32_t SAMPLE_RATE_MS = 10; // 100 Hz sampling rate
     const uint32_t CAN_TX_INTERVAL_MS = 50; // 20 Hz CAN transmission rate
+    const uint32_t DEBUG_INTERVAL_MS = 1000; // 1 Hz debug rate
     
     for (;;) {
         // Read encoder data
         encoder_data_t enc_data = encoder1_get_data();
+        
+        // Call debug function periodically
+        if (task_interval % DEBUG_INTERVAL_MS == 0) {
+            encoder1_debug_status();
+        }
         
         // Send encoder data over CAN every CAN_TX_INTERVAL_MS
         if (task_interval % CAN_TX_INTERVAL_MS == 0) {
