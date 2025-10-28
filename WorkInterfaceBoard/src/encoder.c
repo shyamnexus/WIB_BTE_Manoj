@@ -105,14 +105,11 @@ static void encoder1_configure_tc(void)
     while (TC0->TC_CHANNEL[0].TC_SR & TC_SR_CLKSTA);
     
     // Configure TC0 Channel 0 for quadrature decoder mode
-    // For quadrature decoder, we need to configure it as a capture mode
-    // Set clock source to MCK/2, enable clock input, external trigger on rising edge
+    // For QDE mode, we need to configure it as a simple counter mode
+    // Set clock source to MCK/2, enable waveform mode for QDE
     TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
-                                TC_CMR_CLKI |                   // Clock invert
-                                TC_CMR_ETRGEDG_RISING |         // External trigger edge
-                                TC_CMR_ABETRG |                 // TIOA is used as external trigger
-                                TC_CMR_LDRA_RISING |            // Load RA on rising edge
-                                TC_CMR_LDRB_FALLING;            // Load RB on falling edge
+                                TC_CMR_WAVE |                   // Enable waveform mode
+                                TC_CMR_WAVSEL_UP;               // UP mode for QDE
     
     // Enable the timer counter
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKEN;
@@ -162,8 +159,8 @@ bool encoder1_enable(bool enable)
         pio_clear(PIOD, PIO_PD17);
         g_encoder1_data.enabled = true;
         
-        // Reset position counter
-        tc_write_rc(TC0, 0, 0);
+        // Reset position counter using direct register access
+        TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG;
         g_encoder1_data.position = 0;
         g_last_position = 0;
         
@@ -191,6 +188,7 @@ int32_t encoder1_read_position(void)
     
     // Read current position from Timer Counter using direct register access
     // For quadrature decoder mode, we need to read the position from the QDE register
+    // The QDE position is available in TC_CV when QDE is enabled
     uint32_t tc_value = TC0->TC_CHANNEL[0].TC_CV;
     
     // Debug: Store register values for analysis
@@ -245,8 +243,8 @@ void encoder1_reset_position(void)
         return;
     }
     
-    // Reset Timer Counter
-    tc_write_rc(TC0, 0, 0);
+    // Reset Timer Counter using direct register access
+    TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG;
     
     // Reset global data
     g_encoder1_data.position = 0;
@@ -283,6 +281,38 @@ void encoder1_debug_status(void)
     (void)debug_tc_cv; (void)debug_tc_sr; (void)debug_tc_cmr; (void)debug_tc_bmr; (void)debug_tc_qier;
     (void)debug_pioa_pdsr; (void)debug_piod_pdsr; (void)debug_encoder_enabled; (void)debug_encoder_initialized;
     (void)debug_position; (void)debug_tioa0_configured; (void)debug_tiob0_configured; (void)debug_enable_pin_configured;
+}
+
+// Test function to manually check encoder operation
+void encoder1_test_operation(void)
+{
+    // Initialize encoder if not already done
+    if (!g_encoder_initialized) {
+        encoder1_init();
+    }
+    
+    // Enable encoder
+    encoder1_enable(true);
+    
+    // Read initial position
+    int32_t initial_pos = encoder1_read_position();
+    
+    // Wait a bit and read again
+    for (volatile int i = 0; i < 1000000; i++); // Simple delay
+    
+    int32_t current_pos = encoder1_read_position();
+    
+    // Store results in debug variables
+    volatile int32_t debug_initial_pos = initial_pos;
+    volatile int32_t debug_current_pos = current_pos;
+    volatile int32_t debug_position_change = current_pos - initial_pos;
+    volatile uint32_t debug_tc_cv = TC0->TC_CHANNEL[0].TC_CV;
+    volatile uint32_t debug_tc_sr = TC0->TC_CHANNEL[0].TC_SR;
+    volatile uint32_t debug_tc_cmr = TC0->TC_CHANNEL[0].TC_CMR;
+    volatile uint32_t debug_tc_bmr = TC0->TC_BMR;
+    
+    (void)debug_initial_pos; (void)debug_current_pos; (void)debug_position_change;
+    (void)debug_tc_cv; (void)debug_tc_sr; (void)debug_tc_cmr; (void)debug_tc_bmr;
 }
 
 // FreeRTOS task for encoder reading and CAN transmission
