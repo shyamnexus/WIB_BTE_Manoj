@@ -338,6 +338,8 @@ void encoder1_task(void *arg)
         // Call debug function periodically
         if (task_interval % DEBUG_INTERVAL_MS == 0) {
             encoder1_debug_status();
+            // Also run encoder test
+            encoder1_test();
         }
         
         // Send encoder data over CAN every CAN_TX_INTERVAL_MS
