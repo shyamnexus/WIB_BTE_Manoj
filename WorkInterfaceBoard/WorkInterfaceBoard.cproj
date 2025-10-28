@@ -650,12 +650,6 @@
     <Compile Include="src\can_app.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\spi0.c">
-      <SubType>compile</SubType>
-    </Compile>
-    <Compile Include="src\spi0.h">
-      <SubType>compile</SubType>
-    </Compile>
     <Compile Include="src\tasks.c">
       <SubType>compile</SubType>
     </Compile>
