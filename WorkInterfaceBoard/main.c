@@ -32,6 +32,7 @@
 #include "WIB_Init.h"
 #include "can_app.h"
 #include "tasks.h"
+#include "encoder.h"
 
 int main (void)
 {
