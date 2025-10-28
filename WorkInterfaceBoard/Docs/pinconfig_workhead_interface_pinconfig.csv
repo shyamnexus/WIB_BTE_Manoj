@@ -1,7 +1,7 @@
 Signal,MCU_Port/Name,Pin_Number,Function/Usage,Notes
 I2C_SCL,PA4,55,I2C SCL,Primary I2C bus SCL (I2C[0..1])
 I2C_SDA,PA3,64,I2C SDA,Primary I2C bus SDA (I2C[0..1])
-ENC1_A,PA5/TIOA0,52,Encoder A input,Encoder1 A channel (TIOA0)
+ENC1_A,PA0/TIOA0,52,Encoder A input,Encoder1 A channel (TIOA0)
 ENC1_B,PA1/TIOB0,70,Encoder B input,Encoder1 B channel (TIOB0)
 ENC1_ENABLE,PD17,53,Encoder enable,Encoder1 enable line (PD17/ENABLE1)
 ENC2_A,PA15/TIOA1,33,Encoder A input,Encoder2 A channel (TIOA1)
