@@ -97,28 +97,19 @@ static void encoder1_configure_pins(void)
 
 static void encoder1_configure_tc(void)
 {
-    // Configure Timer Counter 0 for quadrature decoder mode using direct register access
-    // Disable TC0 first
-    TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKDIS;
+    // Configure Timer Counter 0 for quadrature decoder mode
+    // Use ASF functions for proper configuration
     
-    // Wait for disable to take effect
-    while (TC0->TC_CHANNEL[0].TC_SR & TC_SR_CLKSTA);
+    // Initialize TC0 channel 0
+    tc_init(TC0, 0, TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
+                     TC_CMR_CLKI |                   // Clock invert
+                     TC_CMR_ETRGEDG_RISING |         // External trigger edge
+                     TC_CMR_ABETRG |                 // TIOA is used as external trigger
+                     TC_CMR_LDRA_RISING |            // Load RA on rising edge
+                     TC_CMR_LDRB_FALLING);           // Load RB on falling edge
     
-    // Configure TC0 Channel 0 for quadrature decoder mode
-    // For quadrature decoder, we need to configure it as a capture mode
-    // Set clock source to MCK/2, enable clock input, external trigger on rising edge
-    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
-                                TC_CMR_CLKI |                   // Clock invert
-                                TC_CMR_ETRGEDG_RISING |         // External trigger edge
-                                TC_CMR_ABETRG |                 // TIOA is used as external trigger
-                                TC_CMR_LDRA_RISING |            // Load RA on rising edge
-                                TC_CMR_LDRB_FALLING;            // Load RB on falling edge
-    
-    // Enable the timer counter
-    TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKEN;
-    
-    // Wait for enable to take effect
-    while (!(TC0->TC_CHANNEL[0].TC_SR & TC_SR_CLKSTA));
+    // Start the timer counter
+    tc_start(TC0, 0);
     
     // Debug: Store configuration values
     volatile uint32_t debug_tc_cmr = TC0->TC_CHANNEL[0].TC_CMR;
@@ -142,7 +133,7 @@ static void encoder1_configure_qde(void)
                    TC_QIER_QERR;          // Enable quadrature error interrupt
     
     // Reset the position counter to zero
-    TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_SWTRG;
+    tc_write_rc(TC0, 0, 0);
     
     // Debug: Store QDE configuration values
     volatile uint32_t debug_tc_bmr = TC0->TC_BMR;
@@ -189,9 +180,8 @@ int32_t encoder1_read_position(void)
         return 0;
     }
     
-    // Read current position from Timer Counter using direct register access
-    // For quadrature decoder mode, we need to read the position from the QDE register
-    uint32_t tc_value = TC0->TC_CHANNEL[0].TC_CV;
+    // Read current position from Timer Counter using ASF function
+    uint32_t tc_value = tc_read_cv(TC0, 0);
     
     // Debug: Store register values for analysis
     volatile uint32_t debug_tc_cv = tc_value;
@@ -262,7 +252,7 @@ bool encoder1_is_enabled(void)
 // Debug function to check encoder status
 void encoder1_debug_status(void)
 {
-    volatile uint32_t debug_tc_cv = TC0->TC_CHANNEL[0].TC_CV;
+    volatile uint32_t debug_tc_cv = tc_read_cv(TC0, 0);
     volatile uint32_t debug_tc_sr = TC0->TC_CHANNEL[0].TC_SR;
     volatile uint32_t debug_tc_cmr = TC0->TC_CHANNEL[0].TC_CMR;
     volatile uint32_t debug_tc_bmr = TC0->TC_BMR;
@@ -280,9 +270,43 @@ void encoder1_debug_status(void)
     // Check if enable pin is configured correctly
     volatile bool debug_enable_pin_configured = (PIOD->PIO_OSR & PIO_PD17) != 0; // Should be 1 for output
     
+    // Check QDE status
+    volatile uint32_t debug_qde_status = TC0->TC_QISR;
+    volatile bool debug_qde_enabled = (TC0->TC_BMR & TC_BMR_QDEN) != 0;
+    volatile bool debug_position_enabled = (TC0->TC_BMR & TC_BMR_POSEN) != 0;
+    
     (void)debug_tc_cv; (void)debug_tc_sr; (void)debug_tc_cmr; (void)debug_tc_bmr; (void)debug_tc_qier;
     (void)debug_pioa_pdsr; (void)debug_piod_pdsr; (void)debug_encoder_enabled; (void)debug_encoder_initialized;
     (void)debug_position; (void)debug_tioa0_configured; (void)debug_tiob0_configured; (void)debug_enable_pin_configured;
+    (void)debug_qde_status; (void)debug_qde_enabled; (void)debug_position_enabled;
+}
+
+// Test function to verify encoder is working
+bool encoder1_test(void)
+{
+    if (!g_encoder_initialized) {
+        return false;
+    }
+    
+    // Enable encoder
+    encoder1_enable(true);
+    
+    // Read position multiple times to see if it changes
+    int32_t pos1 = encoder1_read_position();
+    vTaskDelay(pdMS_TO_TICKS(10));
+    int32_t pos2 = encoder1_read_position();
+    vTaskDelay(pdMS_TO_TICKS(10));
+    int32_t pos3 = encoder1_read_position();
+    
+    // Check if position is changing (indicating encoder is working)
+    volatile bool test_passed = (pos1 != pos2) || (pos2 != pos3) || (pos1 != pos3);
+    volatile int32_t test_pos1 = pos1;
+    volatile int32_t test_pos2 = pos2;
+    volatile int32_t test_pos3 = pos3;
+    
+    (void)test_passed; (void)test_pos1; (void)test_pos2; (void)test_pos3;
+    
+    return test_passed;
 }
 
 // FreeRTOS task for encoder reading and CAN transmission
