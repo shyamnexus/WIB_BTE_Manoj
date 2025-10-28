@@ -74,6 +74,9 @@ bool encoder1_init(void)
     
     g_encoder_initialized = true;
     
+    // Debug: Test encoder immediately after initialization
+    encoder1_test_operation();
+    
     return true;
 }
 
@@ -107,13 +110,10 @@ static void encoder1_configure_tc(void)
     // Configure TC0 Channel 0 for quadrature decoder mode
     // For QDE mode, we need to configure it as a simple counter mode
     // Set clock source to MCK/2, enable waveform mode for QDE
-//     TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
-//                                 TC_CMR_WAVE |                   // Enable waveform mode
-//                                 TC_CMR_WAVSEL_UP;               // UP mode for QDE
+    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
+                                TC_CMR_WAVE |                   // Enable waveform mode
+                                TC_CMR_WAVSEL_UP;               // UP mode for QDE
     
-	TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_XC0 |  // External clock from TIOA0 (encoder A)
-                                TC_CMR_CLKI; 
-	
     // Enable the timer counter
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKEN;
     
@@ -320,6 +320,23 @@ void encoder1_test_operation(void)
     (void)debug_tc_cv; (void)debug_tc_sr; (void)debug_tc_cmr; (void)debug_tc_bmr;
 }
 
+// Simple encoder test function for debugging
+void encoder1_simple_test(void)
+{
+    // Force enable encoder
+    encoder1_enable(true);
+    
+    // Read position multiple times
+    for (int i = 0; i < 10; i++) {
+        int32_t pos = encoder1_read_position();
+        volatile int32_t debug_pos_reading = pos;
+        (void)debug_pos_reading;
+        
+        // Small delay
+        for (volatile int j = 0; j < 100000; j++);
+    }
+}
+
 // FreeRTOS task for encoder reading and CAN transmission
 void encoder1_task(void *arg)
 {
@@ -335,6 +352,9 @@ void encoder1_task(void *arg)
     
     // Enable encoder
     encoder1_enable(true);
+    
+    // Run simple test immediately
+    encoder1_simple_test();
     
     // Task variables
     uint32_t task_interval = 0;
@@ -353,27 +373,33 @@ void encoder1_task(void *arg)
         
         // Send encoder data over CAN every CAN_TX_INTERVAL_MS
         if (task_interval % CAN_TX_INTERVAL_MS == 0) {
-            if (enc_data.enabled && enc_data.valid) {
-                // Prepare CAN data: 8 bytes
-                // Byte 0-3: Position (32-bit signed, little-endian)
-                // Byte 4-7: Velocity (32-bit signed, little-endian)
-                uint8_t can_data[8];
-                
-                // Pack position (little-endian)
-                can_data[0] = (uint8_t)(enc_data.position & 0xFF);
-                can_data[1] = (uint8_t)((enc_data.position >> 8) & 0xFF);
-                can_data[2] = (uint8_t)((enc_data.position >> 16) & 0xFF);
-                can_data[3] = (uint8_t)((enc_data.position >> 24) & 0xFF);
-                
-                // Pack velocity (little-endian)
-                can_data[4] = (uint8_t)(enc_data.velocity & 0xFF);
-                can_data[5] = (uint8_t)((enc_data.velocity >> 8) & 0xFF);
-                can_data[6] = (uint8_t)((enc_data.velocity >> 16) & 0xFF);
-                can_data[7] = (uint8_t)((enc_data.velocity >> 24) & 0xFF);
-                
-                // Send over CAN
-                can_app_tx(CAN_ID_ENCODER1, can_data, 8);
-            }
+            // Always send encoder data for debugging, even if disabled
+            // Prepare CAN data: 8 bytes
+            // Byte 0-3: Position (32-bit signed, little-endian)
+            // Byte 4-7: Velocity (32-bit signed, little-endian)
+            uint8_t can_data[8];
+            
+            // Pack position (little-endian)
+            can_data[0] = (uint8_t)(enc_data.position & 0xFF);
+            can_data[1] = (uint8_t)((enc_data.position >> 8) & 0xFF);
+            can_data[2] = (uint8_t)((enc_data.position >> 16) & 0xFF);
+            can_data[3] = (uint8_t)((enc_data.position >> 24) & 0xFF);
+            
+            // Pack velocity (little-endian)
+            can_data[4] = (uint8_t)(enc_data.velocity & 0xFF);
+            can_data[5] = (uint8_t)((enc_data.velocity >> 8) & 0xFF);
+            can_data[6] = (uint8_t)((enc_data.velocity >> 16) & 0xFF);
+            can_data[7] = (uint8_t)((enc_data.velocity >> 24) & 0xFF);
+            
+            // Debug: Store encoder data for analysis
+            volatile int32_t debug_position = enc_data.position;
+            volatile int32_t debug_velocity = enc_data.velocity;
+            volatile bool debug_enabled = enc_data.enabled;
+            volatile bool debug_valid = enc_data.valid;
+            (void)debug_position; (void)debug_velocity; (void)debug_enabled; (void)debug_valid;
+            
+            // Send over CAN
+            can_app_tx(CAN_ID_ENCODER1, can_data, 8);
         }
         
         // Increment task interval
