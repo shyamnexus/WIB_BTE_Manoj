@@ -105,11 +105,10 @@ static void encoder1_configure_tc(void)
     while (TC0->TC_CHANNEL[0].TC_SR & TC_SR_CLKSTA);
     
     // Configure TC0 Channel 0 for quadrature decoder mode
-    // For QDE mode, we need to configure it as a simple counter mode
-    // Set clock source to MCK/2, enable waveform mode for QDE
-    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
-                                TC_CMR_WAVE |                   // Enable waveform mode
-                                TC_CMR_WAVSEL_UP;               // UP mode for QDE
+    // For QDE mode, we need to use external clock from TIOA0/TIOB0 pins
+    // This is the correct configuration for quadrature decoding
+    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_XC0 |  // External clock from TIOA0 (encoder A)
+                                TC_CMR_CLKI;          // Clock invert (optional, can be removed if not needed)
     
     // Enable the timer counter
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKEN;
@@ -278,9 +277,21 @@ void encoder1_debug_status(void)
     // Check if enable pin is configured correctly
     volatile bool debug_enable_pin_configured = (PIOD->PIO_OSR & PIO_PD17) != 0; // Should be 1 for output
     
+    // IMPORTANT: Check if TC0 clock is actually enabled (this is what you should monitor)
+    volatile bool debug_tc_clock_enabled = (debug_tc_sr & TC_SR_CLKSTA) != 0; // Should be 1 if clock is enabled
+    
+    // Check QDE configuration
+    volatile bool debug_qde_enabled = (debug_tc_bmr & TC_BMR_QDEN) != 0; // Should be 1 if QDE is enabled
+    volatile bool debug_pos_enabled = (debug_tc_bmr & TC_BMR_POSEN) != 0; // Should be 1 if position counting is enabled
+    
+    // Check encoder pin states
+    volatile bool debug_tioa0_state = (debug_pioa_pdsr & PIO_PA0) != 0; // Encoder A pin state
+    volatile bool debug_tiob0_state = (debug_pioa_pdsr & PIO_PA1) != 0; // Encoder B pin state
+    
     (void)debug_tc_cv; (void)debug_tc_sr; (void)debug_tc_cmr; (void)debug_tc_bmr; (void)debug_tc_qier;
     (void)debug_pioa_pdsr; (void)debug_piod_pdsr; (void)debug_encoder_enabled; (void)debug_encoder_initialized;
     (void)debug_position; (void)debug_tioa0_configured; (void)debug_tiob0_configured; (void)debug_enable_pin_configured;
+    (void)debug_tc_clock_enabled; (void)debug_qde_enabled; (void)debug_pos_enabled; (void)debug_tioa0_state; (void)debug_tiob0_state;
 }
 
 // Test function to manually check encoder operation
@@ -313,6 +324,65 @@ void encoder1_test_operation(void)
     
     (void)debug_initial_pos; (void)debug_current_pos; (void)debug_position_change;
     (void)debug_tc_cv; (void)debug_tc_sr; (void)debug_tc_cmr; (void)debug_tc_bmr;
+}
+
+// Simple verification function to check if TC0 is properly configured
+bool encoder1_verify_configuration(void)
+{
+    if (!g_encoder_initialized) {
+        return false;
+    }
+    
+    // Check if TC0 clock is enabled
+    bool clock_enabled = (TC0->TC_CHANNEL[0].TC_SR & TC_SR_CLKSTA) != 0;
+    
+    // Check if QDE is enabled
+    bool qde_enabled = (TC0->TC_BMR & TC_BMR_QDEN) != 0;
+    
+    // Check if position counting is enabled
+    bool pos_enabled = (TC0->TC_BMR & TC_BMR_POSEN) != 0;
+    
+    // Check if pins are configured correctly
+    bool tioa0_configured = (PIOA->PIO_ABSR & PIO_PA0) == 0; // Should be 0 for peripheral A
+    bool tiob0_configured = (PIOA->PIO_ABSR & PIO_PA1) == 0; // Should be 0 for peripheral A
+    
+    // All checks must pass
+    return clock_enabled && qde_enabled && pos_enabled && tioa0_configured && tiob0_configured;
+}
+
+// Test function to verify TC0 configuration - call this from your debugger
+void encoder1_test_tc0_config(void)
+{
+    // Initialize encoder
+    if (!encoder1_init()) {
+        // Store error state
+        volatile bool init_failed = true;
+        (void)init_failed;
+        return;
+    }
+    
+    // Enable encoder
+    encoder1_enable(true);
+    
+    // Verify configuration
+    bool config_ok = encoder1_verify_configuration();
+    
+    // Store results in debug variables for inspection
+    volatile bool debug_config_ok = config_ok;
+    volatile uint32_t debug_tc_sr = TC0->TC_CHANNEL[0].TC_SR;
+    volatile uint32_t debug_tc_cmr = TC0->TC_CHANNEL[0].TC_CMR;
+    volatile uint32_t debug_tc_bmr = TC0->TC_BMR;
+    volatile uint32_t debug_tc_cv = TC0->TC_CHANNEL[0].TC_CV;
+    volatile bool debug_clock_enabled = (debug_tc_sr & TC_SR_CLKSTA) != 0;
+    volatile bool debug_qde_enabled = (debug_tc_bmr & TC_BMR_QDEN) != 0;
+    
+    // Check pin configuration
+    volatile bool debug_tioa0_configured = (PIOA->PIO_ABSR & PIO_PA0) == 0;
+    volatile bool debug_tiob0_configured = (PIOA->PIO_ABSR & PIO_PA1) == 0;
+    
+    (void)debug_config_ok; (void)debug_tc_sr; (void)debug_tc_cmr; (void)debug_tc_bmr;
+    (void)debug_tc_cv; (void)debug_clock_enabled; (void)debug_qde_enabled;
+    (void)debug_tioa0_configured; (void)debug_tiob0_configured;
 }
 
 // FreeRTOS task for encoder reading and CAN transmission
