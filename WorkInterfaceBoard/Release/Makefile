@@ -58,6 +58,7 @@ SUBDIRS :=  \
 ../src/ASF/sam/drivers/pio/ \
 ../src/ASF/sam/drivers/pmc/ \
 ../src/ASF/sam/drivers/spi/ \
+../src/ASF/sam/drivers/tc/ \
 ../src/ASF/sam/drivers/twi/ \
 ../src/ASF/sam/include \
 ../src/ASF/sam/include/component \
@@ -107,6 +108,7 @@ C_SRCS +=  \
 ../src/ASF/common/services/spi/sam_spi/spi_master.c \
 ../src/ASF/sam/drivers/pio/pio_handler.c \
 ../src/ASF/sam/drivers/spi/spi.c \
+../src/ASF/sam/drivers/tc/tc.c \
 ../src/ASF/sam/drivers/twi/twi.c \
 ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/FreeRTOS_CLI.c \
 ../src/ASF/thirdparty/freertos/freertos-7.3.0/source/list.c \
