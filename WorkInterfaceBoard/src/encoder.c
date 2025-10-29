@@ -106,12 +106,14 @@ static void encoder1_configure_tc(void)
     
     // Configure TC0 Channel 0 for quadrature decoder mode
     // According to SAM4E datasheet section 38.6.16.1, for QDE mode:
-    // - Use external clock source (TIOA0) for counting
+    // - Use internal clock source (the QDE module handles encoder inputs separately)
     // - Enable waveform mode
     // - Set up for quadrature decoding
-    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_XC0 |  // External clock from TIOA0 (encoder A)
-                                 TC_CMR_WAVE |         // Enable waveform mode
-                                 TC_CMR_WAVSEL_UP;     // UP mode for QDE
+    // Note: When QDE is enabled, TIOA0 and TIOB0 are used as encoder inputs, not clock sources
+    // The TC channel needs an internal clock to function properly
+    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Internal clock (QDE handles encoder inputs)
+                                 TC_CMR_WAVE |                  // Enable waveform mode
+                                 TC_CMR_WAVSEL_UP;              // UP mode for QDE
     
     // Enable the timer counter
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKEN;
