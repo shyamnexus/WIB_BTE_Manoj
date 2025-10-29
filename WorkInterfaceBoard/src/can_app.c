@@ -68,22 +68,20 @@ bool can_app_init(void)
 	// Initialize CAN controller with proper baudrate constant
 	// Try 500kbps first (desired rate), then fall back to lower rates if needed
 	volatile uint32_t debug_bitrate_used = 0;
-	if (can_init(CAN0, mck, CAN_BPS_500K));
-//	mck  = mck/6;
-// 	if (can_init(CAN0, mck, CAN_BPS_500K)) {
-// 		debug_bitrate_used = 500; // 500k worked - preferred rate
-// 		/* Override ASF default timing (8..14 TQ) with 16 TQ @ ~81% SP for better margin. */
-// 		can_force_500k_16tq_timing(CAN0, mck);
-// 	} else if (can_init(CAN0, mck, CAN_BPS_250K)) {
-// 		debug_bitrate_used = 250; // 250k worked - fallback
-// 	} else if (can_init(CAN0, mck, CAN_BPS_125K)) {
-// 		debug_bitrate_used = 125; // 125k worked - last resort
-// 	} else {
-// 		// CAN initialization failed - likely due to clock/baudrate mismatch
-// 		volatile uint32_t debug_can_init_fail = 1;
-// 		volatile uint32_t debug_can_sr_after_fail = CAN0->CAN_SR;
-// 		return false; // CAN baudrate configuration failed
-// 	}
+	if (can_init(CAN0, mck, CAN_BPS_500K)) {
+		debug_bitrate_used = 500; // 500k worked - preferred rate
+		/* Override ASF default timing (8..14 TQ) with 16 TQ @ ~81% SP for better margin. */
+		can_force_500k_16tq_timing(CAN0, mck);
+	} else if (can_init(CAN0, mck, CAN_BPS_250K)) {
+		debug_bitrate_used = 250; // 250k worked - fallback
+	} else if (can_init(CAN0, mck, CAN_BPS_125K)) {
+		debug_bitrate_used = 125; // 125k worked - last resort
+	} else {
+		// CAN initialization failed - likely due to clock/baudrate mismatch
+		volatile uint32_t debug_can_init_fail = 1;
+		volatile uint32_t debug_can_sr_after_fail = CAN0->CAN_SR;
+		return false; // CAN baudrate configuration failed
+	}
 	
 	// DIAGNOSTIC: Check CAN status immediately after init
 	volatile uint32_t debug_can_sr_after_init = CAN0->CAN_SR;

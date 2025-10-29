@@ -5,10 +5,11 @@
 #include "semphr.h"
 #include "can_app.h"
 #include "spi0.h"
+#include "encoder.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "TIB_Init.h"
+#include "WIB_Init.h"
 
 #ifndef TickType_t
 typedef portTickType TickType_t; // Backward-compatible alias if TickType_t isn't defined
@@ -37,4 +38,5 @@ void create_application_tasks(void)
 	xTaskCreate(can_rx_task, "canrx", 512, 0, tskIDLE_PRIORITY+2, 0); // CAN RX handler task
 	xTaskCreate(can_status_task, "canstatus", 256, 0, tskIDLE_PRIORITY+1, 0); // CAN status monitoring task
 	xTaskCreate(task_test, "testTask", 512, 0, tskIDLE_PRIORITY+2, 0); // Load cell sampling task
+	xTaskCreate(encoder1_task, "encoder1", 512, 0, tskIDLE_PRIORITY+2, 0); // Encoder1 reading and CAN transmission task
 } // End create_application_tasks

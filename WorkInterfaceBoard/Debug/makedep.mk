@@ -10,13 +10,9 @@ main.c
 
 src\ASF\common\boards\user_board\board_init.c
 
-src\ASF\common\services\spi\sam_spi\spi_master.c
-
 src\ASF\sam\drivers\pio\pio_handler.c
 
-src\ASF\sam\drivers\spi\spi.c
-
-src\ASF\sam\drivers\twi\twi.c
+src\ASF\sam\drivers\tc\tc.c
 
 src\ASF\thirdparty\freertos\freertos-7.3.0\source\FreeRTOS_CLI.c
 
@@ -34,11 +30,11 @@ src\ASF\thirdparty\freertos\freertos-7.3.0\source\timers.c
 
 src\can_app.c
 
-src\spi0.c
+src\encoder.c
 
 src\tasks.c
 
-src\TIB_Init.c
+src\WIB_Init.c
 
 src\ASF\common\services\delay\sam\cycle_counter.c
 

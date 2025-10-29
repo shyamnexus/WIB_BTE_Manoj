@@ -29,20 +29,17 @@
  * Support and FAQ: visit <a href="https://www.microchip.com/support/">Microchip Support</a>
  */
 #include <asf.h> // Aggregate include for ASF drivers and services
-#include "TIB_Init.h"
+#include "WIB_Init.h"
 #include "can_app.h"
 #include "tasks.h"
+#include "encoder.h"
+#include "encoder_gpio_test.h"
 
 int main (void)
 {
 	/* Insert system clock initialization code here (sysclk_init()). */
-
-//	sysclk_init(); // Initialize system clocks based on board configuration
-//	board_init(); // Initialize board-specific pins/peripherals (as configured)
-	//ioport_init(); // Optional: initialize I/O port service if used
-
 	/* Initialize TIB hardware */
-	TIB_Init();
+	WIB_Init();
 	
 	/* Initialize CAN controller */
 	if (!can_app_init()) {
@@ -50,20 +47,24 @@ int main (void)
 		while(1); // Stop execution if CAN fails
 	}
 	
-// 	/* Test CAN communication (optional - can be disabled for production) */
-// 	// Simple CAN controller state test first
-// 	if (!can_app_simple_test()) {
-// 		// CAN controller not in good state - check debug variables
-// 		volatile uint32_t debug_simple_test_failed = 1;
-// 	}
-// 	
-// 	// Uncomment the following lines to enable CAN self-test
-// 	if (!can_app_test_loopback()) {
-// 		// CAN test failed - but continue anyway for now
-// 		// In production, you might want to handle this differently
-// 		volatile uint32_t debug_loopback_test_failed = 1;
-// 	}
-
+	/* Test encoder initialization before starting tasks */
+	encoder1_init();
+	encoder1_enable(true);
+	encoder1_simple_test();
+	
+	/* Run encoder pin toggle test for oscilloscope verification */
+	/* This will toggle PA0, PA1, and PD17 in a specific pattern */
+	/* Connect oscilloscope probes to these pins to verify soldering */
+	encoder1_test_all_pins_sequence();
+	
+	/* Initialize GPIO-based encoder test for pulse counting */
+	/* This will verify that encoder inputs are reaching the MCU */
+	encoder_gpio_test_init();
+	encoder_gpio_test_enable(true);
+	
+	/* Run GPIO encoder test for 10 seconds to count pulses */
+	encoder_gpio_test_run_duration(10000);
+	
 	/* Create FreeRTOS tasks */
 	create_application_tasks();
 	

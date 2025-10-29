@@ -104,24 +104,11 @@
 // From module: SAM4E startup code
 #include <exceptions.h>
 
-// From module: SPI - SAM Implementation
-#include <spi_master.h>
-#include <spi_master.h>
-
-// From module: SPI - Serial Peripheral Interface
-#include <spi.h>
-
 // From module: System Clock Control - SAM4E implementation
 #include <sysclk.h>
 
-// From module: TWI - Two-Wire Interface - SAM implementation
-#include <sam_twi/twi_master.h>
-#include <sam_twi/twi_slave.h>
-#include <twi_master.h>
-#include <twi_slave.h>
-
-// From module: TWI - Two-wire Interface
-#include <twi.h>
+// From module: TC - Timer Counter
+#include <tc.h>
 
 // From module: pio_handler support enabled
 #include <pio_handler.h>
