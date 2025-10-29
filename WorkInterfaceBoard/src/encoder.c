@@ -106,12 +106,14 @@ static void encoder1_configure_tc(void)
     
     // Configure TC0 Channel 0 for quadrature decoder mode
     // According to SAM4E datasheet section 38.6.16.1, for QDE mode:
-    // - Use external clock source (TIOA0) for counting
+    // - Use internal clock source (the QDE module handles encoder inputs separately)
     // - Enable waveform mode
     // - Set up for quadrature decoding
-    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_XC0 |  // External clock from TIOA0 (encoder A)
-                                 TC_CMR_WAVE |         // Enable waveform mode
-                                 TC_CMR_WAVSEL_UP;     // UP mode for QDE
+    // Note: When QDE is enabled, TIOA0 and TIOB0 are used as encoder inputs, not clock sources
+    // The TC channel needs an internal clock to function properly
+    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Internal clock (QDE handles encoder inputs)
+                                 TC_CMR_WAVE |                  // Enable waveform mode
+                                 TC_CMR_WAVSEL_UP;              // UP mode for QDE
     
     // Enable the timer counter
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKEN;
@@ -431,8 +433,12 @@ void encoder1_pin_toggle_test(void)
     
     // Test PA0 (TIOA0) - Encoder A
     for (volatile int i = 0; i < 1000000; i++) {
-        pio_toggle_pin_group(PIOA, PIO_PA0);
+
+        pio_set(PIOA, PIO_PA0);
+
         for (volatile int j = 0; j < 1000; j++); // ~1ms delay
+		pio_clear(PIOA, PIO_PA0);
+		for (volatile int j = 0; j < 1000; j++); // ~1ms delay
     }
     
     // Small pause between tests
@@ -440,8 +446,12 @@ void encoder1_pin_toggle_test(void)
     
     // Test PA1 (TIOB0) - Encoder B  
     for (volatile int i = 0; i < 1000000; i++) {
-        pio_toggle_pin_group(PIOA, PIO_PA1);
+
+        pio_set(PIOA, PIO_PA1);
+
         for (volatile int j = 0; j < 1000; j++); // ~1ms delay
+		pio_clear(PIOA, PIO_PA1);
+		for (volatile int j = 0; j < 1000; j++); // ~1ms delay
     }
     
     // Small pause between tests
@@ -449,8 +459,11 @@ void encoder1_pin_toggle_test(void)
     
     // Test PD17 (Enable) - Encoder Enable
     for (volatile int i = 0; i < 1000000; i++) {
-        pio_toggle_pin_group(PIOD, PIO_PD17);
+
+        pio_set(PIOD, PIO_PD17);
         for (volatile int j = 0; j < 1000; j++); // ~1ms delay
+		pio_clear(PIOD, PIO_PD17);
+		for (volatile int j = 0; j < 1000; j++); // ~1ms delay
     }
 }
 
