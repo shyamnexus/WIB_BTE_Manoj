@@ -433,8 +433,10 @@ void encoder1_pin_toggle_test(void)
     
     // Test PA0 (TIOA0) - Encoder A
     for (volatile int i = 0; i < 1000000; i++) {
-        pio_toggle(PIOA, PIO_PA0);
+        pio_set(PIOA, PIO_PA0);
         for (volatile int j = 0; j < 1000; j++); // ~1ms delay
+		pio_clear(PIOA, PIO_PA0);
+		for (volatile int j = 0; j < 1000; j++); // ~1ms delay
     }
     
     // Small pause between tests
@@ -442,8 +444,10 @@ void encoder1_pin_toggle_test(void)
     
     // Test PA1 (TIOB0) - Encoder B  
     for (volatile int i = 0; i < 1000000; i++) {
-        pio_toggle(PIOA, PIO_PA1);
+        pio_set(PIOA, PIO_PA1);
         for (volatile int j = 0; j < 1000; j++); // ~1ms delay
+		pio_clear(PIOA, PIO_PA1);
+		for (volatile int j = 0; j < 1000; j++); // ~1ms delay
     }
     
     // Small pause between tests
@@ -451,8 +455,10 @@ void encoder1_pin_toggle_test(void)
     
     // Test PD17 (Enable) - Encoder Enable
     for (volatile int i = 0; i < 1000000; i++) {
-        pio_toggle(PIOD, PIO_PD17);
+        pio_set(PIOD, PIO_PD17);
         for (volatile int j = 0; j < 1000; j++); // ~1ms delay
+		pio_clear(PIOD, PIO_PD17);
+		for (volatile int j = 0; j < 1000; j++); // ~1ms delay
     }
 }
 
