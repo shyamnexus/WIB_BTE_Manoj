@@ -283,8 +283,9 @@ void encoder1_debug_status(void)
     volatile uint32_t debug_max_filter = (TC0->TC_BMR & TC_BMR_MAXFILT_Msk) >> TC_BMR_MAXFILT_Pos;
     
     // Check if TIOA0 and TIOB0 pins are configured correctly
-    volatile bool debug_tioa0_configured = (PIOA->PIO_ABSR & PIO_PA0) == 0; // Should be 0 for peripheral A
-    volatile bool debug_tiob0_configured = (PIOA->PIO_ABSR & PIO_PA1) == 0; // Should be 0 for peripheral A
+    // For PIO_PERIPH_A, both PIO_ABCDSR[0] and PIO_ABCDSR[1] should have the bit cleared (0)
+    volatile bool debug_tioa0_configured = ((PIOA->PIO_ABCDSR[0] & PIO_PA0) == 0) && ((PIOA->PIO_ABCDSR[1] & PIO_PA0) == 0);
+    volatile bool debug_tiob0_configured = ((PIOA->PIO_ABCDSR[0] & PIO_PA1) == 0) && ((PIOA->PIO_ABCDSR[1] & PIO_PA1) == 0);
     
     // Check if enable pin is configured correctly
     volatile bool debug_enable_pin_configured = (PIOD->PIO_OSR & PIO_PD17) != 0; // Should be 1 for output
