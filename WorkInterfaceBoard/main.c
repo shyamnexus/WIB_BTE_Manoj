@@ -33,6 +33,7 @@
 #include "can_app.h"
 #include "tasks.h"
 #include "encoder.h"
+#include "encoder_gpio_test.h"
 
 int main (void)
 {
@@ -55,6 +56,14 @@ int main (void)
 	/* This will toggle PA0, PA1, and PD17 in a specific pattern */
 	/* Connect oscilloscope probes to these pins to verify soldering */
 	encoder1_test_all_pins_sequence();
+	
+	/* Initialize GPIO-based encoder test for pulse counting */
+	/* This will verify that encoder inputs are reaching the MCU */
+	encoder_gpio_test_init();
+	encoder_gpio_test_enable(true);
+	
+	/* Run GPIO encoder test for 10 seconds to count pulses */
+	encoder_gpio_test_run_duration(10000);
 	
 	/* Create FreeRTOS tasks */
 	create_application_tasks();
