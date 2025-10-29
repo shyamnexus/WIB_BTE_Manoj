@@ -51,6 +51,13 @@ void encoder1_test_operation(void);
 void encoder1_simple_test(void);
 void encoder1_check_qde_status(void);
 
+// Pin toggle test functions for oscilloscope verification
+void encoder1_pin_toggle_test(void);
+void encoder1_configure_pins_as_gpio(void);
+void encoder1_restore_pins_as_peripheral(void);
+void encoder1_test_all_pins_sequence(void);
+void encoder1_standalone_pin_test(void);
+
 // FreeRTOS task for encoder reading and CAN transmission
 void encoder1_task(void *arg);
 
