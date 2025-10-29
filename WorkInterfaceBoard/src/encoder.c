@@ -105,11 +105,13 @@ static void encoder1_configure_tc(void)
     while (TC0->TC_CHANNEL[0].TC_SR & TC_SR_CLKSTA);
     
     // Configure TC0 Channel 0 for quadrature decoder mode
-    // For QDE mode, we need to configure it as a simple counter mode
-    // Set clock source to MCK/2, enable waveform mode for QDE
-    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_TIMER_CLOCK1 |  // Clock source: MCK/2
-                                 TC_CMR_WAVE |                   // Enable waveform mode
-                                 TC_CMR_WAVSEL_UP;               // UP mode for QDE
+    // According to SAM4E datasheet section 38.6.16.1, for QDE mode:
+    // - Use external clock source (TIOA0) for counting
+    // - Enable waveform mode
+    // - Set up for quadrature decoding
+    TC0->TC_CHANNEL[0].TC_CMR = TC_CMR_TCCLKS_XC0 |  // External clock from TIOA0 (encoder A)
+                                 TC_CMR_WAVE |         // Enable waveform mode
+                                 TC_CMR_WAVSEL_UP;     // UP mode for QDE
     
     // Enable the timer counter
     TC0->TC_CHANNEL[0].TC_CCR = TC_CCR_CLKEN;
@@ -126,12 +128,13 @@ static void encoder1_configure_tc(void)
 static void encoder1_configure_qde(void)
 {
     // Configure Quadrature Decoder mode using direct register access
+    // According to SAM4E datasheet section 38.6.16.1, QDE configuration:
     // Enable QDE in TC_BMR register
     TC0->TC_BMR = TC_BMR_QDEN |           // Enable QDE
                   TC_BMR_POSEN |          // Enable position counting
                   TC_BMR_SPEEDEN |        // Enable speed counting
                   TC_BMR_FILTER |         // Enable input filter
-                  TC_BMR_MAXFILT(0x3F);   // Set maximum filter value
+                  TC_BMR_MAXFILT(0x3F);   // Set maximum filter value (63)
     
     // Configure QDE interrupt enable (optional)
     TC0->TC_QIER = TC_QIER_IDX |          // Enable index interrupt
@@ -271,18 +274,32 @@ void encoder1_debug_status(void)
     volatile bool debug_encoder_initialized = g_encoder_initialized;
     volatile int32_t debug_position = g_encoder1_data.position;
     
+    // Check QDE status according to datasheet section 38.6.16.1
+    volatile uint32_t debug_qde_status = TC0->TC_QISR;  // QDE Interrupt Status Register
+    volatile bool debug_qde_enabled = (TC0->TC_BMR & TC_BMR_QDEN) != 0;
+    volatile bool debug_position_enabled = (TC0->TC_BMR & TC_BMR_POSEN) != 0;
+    volatile bool debug_speed_enabled = (TC0->TC_BMR & TC_BMR_SPEEDEN) != 0;
+    volatile bool debug_filter_enabled = (TC0->TC_BMR & TC_BMR_FILTER) != 0;
+    volatile uint32_t debug_max_filter = (TC0->TC_BMR & TC_BMR_MAXFILT_Msk) >> TC_BMR_MAXFILT_Pos;
+    
     // Check if TIOA0 and TIOB0 pins are configured correctly
-   // volatile bool debug_tioa0_configured = (PIOA->PIO_ABSR & PIO_PA0) == 0; // Should be 0 for peripheral A
- //   volatile bool debug_tiob0_configured = (PIOA->PIO_ABSR & PIO_PA1) == 0; // Should be 0 for peripheral A
+    volatile bool debug_tioa0_configured = (PIOA->PIO_ABSR & PIO_PA0) == 0; // Should be 0 for peripheral A
+    volatile bool debug_tiob0_configured = (PIOA->PIO_ABSR & PIO_PA1) == 0; // Should be 0 for peripheral A
     
     // Check if enable pin is configured correctly
     volatile bool debug_enable_pin_configured = (PIOD->PIO_OSR & PIO_PD17) != 0; // Should be 1 for output
     
+    // Check pin states
+    volatile bool debug_tioa0_state = (PIOA->PIO_PDSR & PIO_PA0) != 0;
+    volatile bool debug_tiob0_state = (PIOA->PIO_PDSR & PIO_PA1) != 0;
+    volatile bool debug_enable_pin_state = (PIOD->PIO_PDSR & PIO_PD17) != 0;
+    
     (void)debug_tc_cv; (void)debug_tc_sr; (void)debug_tc_cmr; (void)debug_tc_bmr; (void)debug_tc_qier;
     (void)debug_pioa_pdsr; (void)debug_piod_pdsr; (void)debug_encoder_enabled; (void)debug_encoder_initialized;
-    (void)debug_position; (void)
-	//debug_tioa0_configured; (void)debug_tiob0_configured; 
-	(void)debug_enable_pin_configured;
+    (void)debug_position; (void)debug_tioa0_configured; (void)debug_tiob0_configured; 
+    (void)debug_enable_pin_configured; (void)debug_qde_status; (void)debug_qde_enabled;
+    (void)debug_position_enabled; (void)debug_speed_enabled; (void)debug_filter_enabled;
+    (void)debug_max_filter; (void)debug_tioa0_state; (void)debug_tiob0_state; (void)debug_enable_pin_state;
 }
 
 // Test function to manually check encoder operation
@@ -339,6 +356,36 @@ void encoder1_simple_test(void)
     }
 }
 
+// Check QDE status according to datasheet section 38.6.16.1
+void encoder1_check_qde_status(void)
+{
+    // Check QDE interrupt status register
+    volatile uint32_t qde_status = TC0->TC_QISR;
+    volatile bool qde_error = (qde_status & TC_QISR_QERR) != 0;
+    volatile bool direction_changed = (qde_status & TC_QISR_DIRCHG) != 0;
+    volatile bool index_pulse = (qde_status & TC_QISR_IDX) != 0;
+    
+    // Check if QDE is properly enabled
+    volatile bool qde_enabled = (TC0->TC_BMR & TC_BMR_QDEN) != 0;
+    volatile bool position_enabled = (TC0->TC_BMR & TC_BMR_POSEN) != 0;
+    volatile bool speed_enabled = (TC0->TC_BMR & TC_BMR_SPEEDEN) != 0;
+    
+    // Check Timer Counter status
+    volatile uint32_t tc_status = TC0->TC_CHANNEL[0].TC_SR;
+    volatile bool tc_clock_enabled = (tc_status & TC_SR_CLKSTA) != 0;
+    volatile bool tc_overflow = (tc_status & TC_SR_LOVRS) != 0;
+    
+    // Check pin states
+    volatile bool tioa0_state = (PIOA->PIO_PDSR & PIO_PA0) != 0;
+    volatile bool tiob0_state = (PIOA->PIO_PDSR & PIO_PA1) != 0;
+    
+    // Store all debug values
+    (void)qde_status; (void)qde_error; (void)direction_changed; (void)index_pulse;
+    (void)qde_enabled; (void)position_enabled; (void)speed_enabled;
+    (void)tc_status; (void)tc_clock_enabled; (void)tc_overflow;
+    (void)tioa0_state; (void)tiob0_state;
+}
+
 // FreeRTOS task for encoder reading and CAN transmission
 void encoder1_task(void *arg)
 {
@@ -371,6 +418,7 @@ void encoder1_task(void *arg)
         // Call debug function periodically
         if (task_interval % DEBUG_INTERVAL_MS == 0) {
             encoder1_debug_status();
+            encoder1_check_qde_status();
         }
         
         // Send encoder data over CAN every CAN_TX_INTERVAL_MS
