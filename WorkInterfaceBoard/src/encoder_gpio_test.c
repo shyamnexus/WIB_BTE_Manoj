@@ -15,6 +15,7 @@
 
 #include "encoder_gpio_test.h"
 #include "asf.h"
+#include "pio.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -41,11 +42,11 @@ static void encoder_gpio_clear_interrupts(void);
 void PIOA_Handler(void)
 {
     // Check if interrupt is from our pins
-    uint32_t pio_status = pio_get_interrupt_status(PIOA, PIO_INTERRUPT_ENABLE);
+    uint32_t pio_status = pio_get_interrupt_status(PIOA);
     
     if (pio_status & PIO_PA0) {
         // PA0 (Encoder A) interrupt
-        bool current_a_state = pio_get(PIOA, PIO_PA0);
+        bool current_a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA0);
         
         if (current_a_state != g_prev_a_state) {
             if (current_a_state) {
@@ -60,7 +61,7 @@ void PIOA_Handler(void)
     
     if (pio_status & PIO_PA1) {
         // PA1 (Encoder B) interrupt
-        bool current_b_state = pio_get(PIOA, PIO_PA1);
+        bool current_b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
         
         if (current_b_state != g_prev_b_state) {
             if (current_b_state) {
@@ -73,8 +74,7 @@ void PIOA_Handler(void)
         }
     }
     
-    // Clear interrupt flags
-    pio_clear_interrupt(PIOA, pio_status);
+    // Interrupts are automatically cleared when pio_get_interrupt_status is called
 }
 
 bool encoder_gpio_test_init(void)
@@ -103,8 +103,8 @@ bool encoder_gpio_test_init(void)
     g_encoder_enabled = false;
     
     // Read initial pin states
-    g_prev_a_state = pio_get(PIOA, PIO_PA0);
-    g_prev_b_state = pio_get(PIOA, PIO_PA1);
+    g_prev_a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA0);
+    g_prev_b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
     
     g_initialized = true;
     
@@ -127,10 +127,10 @@ static void encoder_gpio_configure_pins(void)
 static void encoder_gpio_configure_interrupts(void)
 {
     // Configure PA0 for both rising and falling edge interrupts
-    pio_configure_interrupt(PIOA, PIO_PA0, PIO_IT_EDGE | PIO_IT_BOTH_EDGE);
+    pio_configure_interrupt(PIOA, PIO_PA0, PIO_IT_RISE_EDGE | PIO_IT_FALL_EDGE);
     
     // Configure PA1 for both rising and falling edge interrupts
-    pio_configure_interrupt(PIOA, PIO_PA1, PIO_IT_EDGE | PIO_IT_BOTH_EDGE);
+    pio_configure_interrupt(PIOA, PIO_PA1, PIO_IT_RISE_EDGE | PIO_IT_FALL_EDGE);
     
     // Enable interrupts in PIO controller
     pio_enable_interrupt(PIOA, PIO_PA0 | PIO_PA1);
@@ -144,8 +144,9 @@ static void encoder_gpio_configure_interrupts(void)
 
 static void encoder_gpio_clear_interrupts(void)
 {
-    // Clear any pending interrupts
-    pio_clear_interrupt(PIOA, PIO_PA0 | PIO_PA1);
+    // Clear any pending interrupts by reading the interrupt status
+    // This automatically clears the interrupt flags
+    pio_get_interrupt_status(PIOA);
 }
 
 bool encoder_gpio_test_enable(bool enable)
@@ -166,8 +167,8 @@ bool encoder_gpio_test_enable(bool enable)
         encoder_gpio_clear_interrupts();
         
         // Read current pin states
-        g_prev_a_state = pio_get(PIOA, PIO_PA0);
-        g_prev_b_state = pio_get(PIOA, PIO_PA1);
+        g_prev_a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA0);
+        g_prev_b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
         
     } else {
         // Disable encoder (set PD17 high)
@@ -202,9 +203,9 @@ encoder_gpio_data_t encoder_gpio_test_get_data(void)
     data.initialized = g_initialized;
     
     // Read current pin states
-    data.current_a_state = pio_get(PIOA, PIO_PA0);
-    data.current_b_state = pio_get(PIOA, PIO_PA1);
-    data.enable_pin_state = pio_get(PIOD, PIO_PD17);
+    data.current_a_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA0);
+    data.current_b_state = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+    data.enable_pin_state = pio_get(PIOD, PIO_TYPE_PIO_INPUT, PIO_PD17);
     
     return data;
 }
@@ -286,21 +287,21 @@ void encoder_gpio_test_pin_verification(void)
     
     // Test sequence to verify pin states
     // Phase 1: Read initial states
-    volatile bool initial_a = pio_get(PIOA, PIO_PA0);
-    volatile bool initial_b = pio_get(PIOA, PIO_PA1);
-    volatile bool initial_enable = pio_get(PIOD, PIO_PD17);
+    volatile bool initial_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA0);
+    volatile bool initial_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+    volatile bool initial_enable = pio_get(PIOD, PIO_TYPE_PIO_INPUT, PIO_PD17);
     
     // Phase 2: Enable encoder and read states
     encoder_gpio_test_enable(true);
-    volatile bool enabled_a = pio_get(PIOA, PIO_PA0);
-    volatile bool enabled_b = pio_get(PIOA, PIO_PA1);
-    volatile bool enabled_enable = pio_get(PIOD, PIO_PD17);
+    volatile bool enabled_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA0);
+    volatile bool enabled_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+    volatile bool enabled_enable = pio_get(PIOD, PIO_TYPE_PIO_INPUT, PIO_PD17);
     
     // Phase 3: Disable encoder and read states
     encoder_gpio_test_enable(false);
-    volatile bool disabled_a = pio_get(PIOA, PIO_PA0);
-    volatile bool disabled_b = pio_get(PIOA, PIO_PA1);
-    volatile bool disabled_enable = pio_get(PIOD, PIO_PD17);
+    volatile bool disabled_a = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA0);
+    volatile bool disabled_b = pio_get(PIOA, PIO_TYPE_PIO_INPUT, PIO_PA1);
+    volatile bool disabled_enable = pio_get(PIOD, PIO_TYPE_PIO_INPUT, PIO_PD17);
     
     // Store all values for analysis
     (void)initial_a; (void)initial_b; (void)initial_enable;
