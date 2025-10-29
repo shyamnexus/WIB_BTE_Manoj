@@ -51,6 +51,11 @@ int main (void)
 	encoder1_enable(true);
 	encoder1_simple_test();
 	
+	/* Run encoder pin toggle test for oscilloscope verification */
+	/* This will toggle PA0, PA1, and PD17 in a specific pattern */
+	/* Connect oscilloscope probes to these pins to verify soldering */
+	encoder1_test_all_pins_sequence();
+	
 	/* Create FreeRTOS tasks */
 	create_application_tasks();
 	

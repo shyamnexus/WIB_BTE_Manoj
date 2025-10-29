@@ -387,6 +387,150 @@ void encoder1_check_qde_status(void)
     (void)tioa0_state; (void)tiob0_state;
 }
 
+// Configure encoder pins as GPIO outputs for testing
+void encoder1_configure_pins_as_gpio(void)
+{
+    // Enable PIOA and PIOD clocks
+    pmc_enable_periph_clk(ID_PIOA);
+    pmc_enable_periph_clk(ID_PIOD);
+    
+    // Configure PA0 (TIOA0) as GPIO output
+    pio_configure(PIOA, PIO_OUTPUT_0, PIO_PA0, 0);
+    pio_clear(PIOA, PIO_PA0); // Start with low
+    
+    // Configure PA1 (TIOB0) as GPIO output  
+    pio_configure(PIOA, PIO_OUTPUT_0, PIO_PA1, 0);
+    pio_clear(PIOA, PIO_PA1); // Start with low
+    
+    // Configure PD17 (Enable) as GPIO output
+    pio_configure(PIOD, PIO_OUTPUT_0, PIO_PD17, 0);
+    pio_set(PIOD, PIO_PD17); // Start with high (disabled state)
+}
+
+// Restore encoder pins to peripheral mode
+void encoder1_restore_pins_as_peripheral(void)
+{
+    // Configure PA0 as TIOA0 (peripheral A)
+    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA0, 0);
+    
+    // Configure PA1 as TIOB0 (peripheral A)  
+    pio_configure(PIOA, PIO_PERIPH_A, PIO_PA1, 0);
+    
+    // Keep PD17 as output (it's always GPIO)
+    // pio_configure(PIOD, PIO_OUTPUT_0, PIO_PD17, 0);
+}
+
+// Simple pin toggle test - toggles each pin individually
+void encoder1_pin_toggle_test(void)
+{
+    // Configure pins as GPIO outputs
+    encoder1_configure_pins_as_gpio();
+    
+    // Test sequence: Each pin toggles for 1 second
+    // This makes it easy to identify each pin on the oscilloscope
+    
+    // Test PA0 (TIOA0) - Encoder A
+    for (volatile int i = 0; i < 1000000; i++) {
+        pio_toggle(PIOA, PIO_PA0);
+        for (volatile int j = 0; j < 1000; j++); // ~1ms delay
+    }
+    
+    // Small pause between tests
+    for (volatile int i = 0; i < 100000; i++);
+    
+    // Test PA1 (TIOB0) - Encoder B  
+    for (volatile int i = 0; i < 1000000; i++) {
+        pio_toggle(PIOA, PIO_PA1);
+        for (volatile int j = 0; j < 1000; j++); // ~1ms delay
+    }
+    
+    // Small pause between tests
+    for (volatile int i = 0; i < 100000; i++);
+    
+    // Test PD17 (Enable) - Encoder Enable
+    for (volatile int i = 0; i < 1000000; i++) {
+        pio_toggle(PIOD, PIO_PD17);
+        for (volatile int j = 0; j < 1000; j++); // ~1ms delay
+    }
+}
+
+// Comprehensive test sequence for all pins
+void encoder1_test_all_pins_sequence(void)
+{
+    // Configure pins as GPIO outputs
+    encoder1_configure_pins_as_gpio();
+    
+    // Test sequence with different patterns to make oscilloscope identification easier
+    
+    // Phase 1: All pins low for 2 seconds (baseline)
+    pio_clear(PIOA, PIO_PA0);
+    pio_clear(PIOA, PIO_PA1);
+    pio_clear(PIOD, PIO_PD17);
+    for (volatile int i = 0; i < 2000000; i++);
+    
+    // Phase 2: PA0 (TIOA0) square wave - 1Hz for 3 seconds
+    for (volatile int cycle = 0; cycle < 3; cycle++) {
+        pio_set(PIOA, PIO_PA0);
+        for (volatile int i = 0; i < 500000; i++); // 0.5s high
+        pio_clear(PIOA, PIO_PA0);
+        for (volatile int i = 0; i < 500000; i++); // 0.5s low
+    }
+    
+    // Phase 3: PA1 (TIOB0) square wave - 2Hz for 3 seconds  
+    for (volatile int cycle = 0; cycle < 6; cycle++) {
+        pio_set(PIOA, PIO_PA1);
+        for (volatile int i = 0; i < 250000; i++); // 0.25s high
+        pio_clear(PIOA, PIO_PA1);
+        for (volatile int i = 0; i < 250000; i++); // 0.25s low
+    }
+    
+    // Phase 4: PD17 (Enable) square wave - 0.5Hz for 4 seconds
+    for (volatile int cycle = 0; cycle < 2; cycle++) {
+        pio_set(PIOD, PIO_PD17);
+        for (volatile int i = 0; i < 1000000; i++); // 1s high
+        pio_clear(PIOD, PIO_PD17);
+        for (volatile int i = 0; i < 1000000; i++); // 1s low
+    }
+    
+    // Phase 5: All pins high for 2 seconds
+    pio_set(PIOA, PIO_PA0);
+    pio_set(PIOA, PIO_PA1);
+    pio_set(PIOD, PIO_PD17);
+    for (volatile int i = 0; i < 2000000; i++);
+    
+    // Phase 6: Alternating pattern - PA0 and PA1 toggle alternately
+    for (volatile int cycle = 0; cycle < 10; cycle++) {
+        pio_set(PIOA, PIO_PA0);
+        pio_clear(PIOA, PIO_PA1);
+        for (volatile int i = 0; i < 200000; i++); // 0.2s
+        
+        pio_clear(PIOA, PIO_PA0);
+        pio_set(PIOA, PIO_PA1);
+        for (volatile int i = 0; i < 200000; i++); // 0.2s
+    }
+    
+    // Phase 7: All pins low for 2 seconds (end)
+    pio_clear(PIOA, PIO_PA0);
+    pio_clear(PIOA, PIO_PA1);
+    pio_clear(PIOD, PIO_PD17);
+    for (volatile int i = 0; i < 2000000; i++);
+}
+
+// Standalone pin test - runs continuously for oscilloscope testing
+void encoder1_standalone_pin_test(void)
+{
+    // Configure pins as GPIO outputs
+    encoder1_configure_pins_as_gpio();
+    
+    // Run the test sequence in a loop
+    while(1) {
+        encoder1_test_all_pins_sequence();
+        
+        // Add a longer pause between test cycles
+        for (volatile int i = 0; i < 5000000; i++); // 5 second pause
+    }
+}
+
 // FreeRTOS task for encoder reading and CAN transmission
 void encoder1_task(void *arg)
 {
