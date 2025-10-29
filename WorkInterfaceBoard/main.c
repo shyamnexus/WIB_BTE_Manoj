@@ -45,6 +45,12 @@ int main (void)
 		// CAN initialization failed - handle error
 		while(1); // Stop execution if CAN fails
 	}
+	
+	/* Test encoder initialization before starting tasks */
+	encoder1_init();
+	encoder1_enable(true);
+	encoder1_simple_test();
+	
 	/* Create FreeRTOS tasks */
 	create_application_tasks();
 	
